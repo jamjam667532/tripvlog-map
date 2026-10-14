@@ -15,11 +15,11 @@ jobs:
   lint-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -35,11 +35,11 @@ jobs:
   synth:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
       - run: uv sync --locked
@@ -53,14 +53,14 @@ jobs:
         function:
           [api_public, api_jobs, api_me, collect, observe, interpret, match, aggregate, cleanup]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build Lambda image
         run: >
           docker build -f backend/Dockerfile
           --build-arg FUNCTION=${{ matrix.function }}
           -t tripvlog-${{ matrix.function }}:ci .
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: tripvlog-${{ matrix.function }}:ci
           severity: CRITICAL,HIGH
