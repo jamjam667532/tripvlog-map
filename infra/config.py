@@ -9,6 +9,10 @@ BEDROCK_INTERPRETER_MODEL_ID = "..."
 BEDROCK_COMPARE_MODEL_ID = "..."  # TODO(verify): GPT 5.6 Luna 모델 ID
 BEDROCK_STYLE_MODEL_ID = "..."  # TODO(verify): Amazon Nova Micro 모델 ID
 GEMINI_MODEL = "..."  # TODO(verify): 무료 티어에서 YouTube URL 입력을 지원하는 Flash 계열
+# TODO(verify): LOW는 토큰을 줄이지만 간판·자막 인식이 떨어질 수 있다. M7에서 LOW/MEDIUM 비교
+GEMINI_MEDIA_RESOLUTION = "MEDIA_RESOLUTION_LOW"
+# TODO(verify): 해석 모델이 Converse 구조화 출력(outputConfig json_schema)을 지원하는지
+BEDROCK_STRUCTURED_OUTPUT = True
 ANALYSIS_VERSION = "v1-haiku45"  # 모델·프롬프트·스키마가 바뀌면 올린다
 MAX_VIDEOS_PER_JOB = 5
 SPARE_VIDEOS_PER_JOB = 3  # collect가 남겨 두는 예비 영상(서로 다른 채널). 저장만 하므로 비용 없음
