@@ -235,7 +235,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
 3. `videos.list`로 메타데이터(길이, 공개 여부, 채널) 조회 → YoutubeCache(VIDEO) 저장.
 4. 규칙 필터: 같은 영상 제거, 공개만, 길이 ≥ 3분, 최근 2년, 채널당 1개, 재업로드 의심은 표시만(제외하지 않음). 장소 겹침으로 거르지 않는다.
 5. 스타일 태그(Nova Micro, 제목+설명란): 사용자 선호 스타일 영상을 우선하되 채널 수 확보가 우선. 정책 확인 전에는 `STYLE_TAGGING_ENABLED=false`로 두고 규칙 키워드 태깅만 사용.
-6. 최대 5개 선택, Jobs.videoRefs 기록.
+6. 최대 5개 선택, Jobs.videoRefs 기록. 남은 후보 중 다른 채널 영상을 예비로 최대 `SPARE_VIDEOS_PER_JOB`개 Jobs.spareVideos에 기록(결정 0002-5).
 
 ### 5.2 observe (Gemini)
 
@@ -299,6 +299,7 @@ class InterpretationResult(BaseModel):
 - `time_evidence.kind == "SCENE"`이면 situation은 `DAY | NIGHT`만 허용하고, 다른 값이면 그 시간 근거 항목만 버린다. `CREATOR_TIP`로 바꾸지 않는다. (결정 0002-1)
 - `localClockTime`은 `STATED_TIME`일 때만 허용. 다른 kind면 null로 강제.
 - ratings 값은 Enum 외 값이면 `UNDETERMINED`.
+- 형식 검증에 실패하면 그 영상의 Bedrock만 1회 재요청한다. 그래도 실패하면 영상 FAILED 후 예비 영상으로 대체한다(이미 분석된 예비 영상 우선, 없으면 가장 짧은 영상, 작업당 `MAX_REPLACEMENTS_PER_JOB`개까지). (결정 0002-5)
 
 Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거만 사용, 서로 다른 지점 합치지 않기, 단순 언급과 방문 구분, 평가 대상이 모호하면 UNCLEAR, 장면만으로 시간 추천 만들지 않기, 재생 위치를 방문 시각으로 쓰지 않기.
 

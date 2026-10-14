@@ -41,6 +41,15 @@ class VideoRef(CamelModel):
     analysis_version: NonEmptyStr
     state: VideoState = "PENDING"
     error: str | None = None
+    replaces: VideoId | None = None  # 결정 0002-5: 실패 영상 대신 분석한 대체 영상이면 원래 videoId
+
+
+class SpareVideo(CamelModel):
+    """collect가 남겨 둔 예비 영상. 분석 실패 시 대체 후보(결정 0002-5)."""
+
+    video_id: VideoId
+    channel_id: ChannelId
+    duration_sec: NonNegative  # 새로 분석할 때 짧은 영상부터(Gemini 비용은 길이에 비례)
 
 
 class JobMetrics(CamelModel):
@@ -60,6 +69,7 @@ class JobItem(CamelModel):
     status: JobStatus
     request: JobRequestSpec
     video_refs: list[VideoRef] = Field(default_factory=list)
+    spare_videos: list[SpareVideo] = Field(default_factory=list)
     progress: Progress = Field(default_factory=Progress)
     execution_arn: str | None = None
     result_s3_key: str | None = None
@@ -76,9 +86,20 @@ class JobItem(CamelModel):
 
     @model_validator(mode="after")
     def _distinct_channels(self) -> "JobItem":
-        channels = [r.channel_id for r in self.video_refs]
+        # 분석 영상과 예비 영상 모두 채널당 1개
+        channels = [r.channel_id for r in self.video_refs] + [
+            s.channel_id for s in self.spare_videos
+        ]
         if len(set(channels)) != len(channels):
-            raise ValueError("videoRefs must come from different channels")
+            raise ValueError("videoRefs and spareVideos must come from different channels")
+        return self
+
+    @model_validator(mode="after")
+    def _replacement_targets_failed(self) -> "JobItem":
+        failed = {r.video_id for r in self.video_refs if r.state == "FAILED"}
+        for ref in self.video_refs:
+            if ref.replaces is not None and ref.replaces not in failed:
+                raise ValueError("replaces must point to a FAILED video in videoRefs")
         return self
 
 
