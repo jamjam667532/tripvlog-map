@@ -62,6 +62,7 @@ docs/                     기획서, implementation-spec, decisions/
 
 ## 작업 방식
 
+- 여러 에이전트·팀원이 함께 작업한다. 현재 상태, 브랜치·PR 규칙, 작업 분담은 `AGENTS.md`를 따른다.
 - 마일스톤 순서는 `docs/implementation-spec.md`의 "구현 순서"를 따른다. 한 번에 한 마일스톤만 진행하고, 완료 조건(테스트 통과)을 확인한 뒤 다음으로 간다.
 - 명세에 없는 결정이 필요하면 임의로 정하지 말고 `docs/decisions/`에 제안 파일을 만들고 사람에게 묻는다.
 - 모델 ID, 리전, 한도 값처럼 콘솔에서 확인해야 하는 값은 `infra/config.py`와 환경 변수로 빼고 TODO로 표시한다.
