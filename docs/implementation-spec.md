@@ -324,6 +324,7 @@ Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거
   - 평가: 항목별로 채널 단위 집계. 같은 채널 내 상충은 MIXED. NONE은 긍정으로 세지 않음
   - 시간대 근거: kind·situation별 채널 수, 상충 그대로 나열. "추천" 표현은 CREATOR_TIP이 있거나 같은 방향 WAIT_EXPERIENCE가 2채널 이상일 때만
 - 순위(`rules/ranking.py`): 기본 점수 = 방문 채널 수 + 명시적 긍정 가중. 선호 스타일 일치·참고 채널 방문에 가중치. 조회수 등 API 지표 사용 금지.
+- 평가·시간 근거의 방문 근거 한정, 대기 방향 판단, 대체 영상과 PARTIAL, 스타일 일치 기준, 언급만 된 장소 제외는 결정 0003을 따른다.
 - 지역 묶음: 좌표 기준 간단한 그리드 또는 k-means(numpy). 일자·순서 개념 없음.
 - 결과 JSON을 `results/{jobId}/result.json`에 저장, Jobs 갱신. 실패 영상이 있으면 PARTIAL. `results/`에는 S3 수명 주기 25일(결정 0002-4).
 
