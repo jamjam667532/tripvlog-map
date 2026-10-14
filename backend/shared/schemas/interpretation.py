@@ -5,7 +5,15 @@ from typing import Annotated, Any
 from pydantic import Field, field_validator
 
 from shared.schemas.base import AIModel
-from shared.schemas.common import Category, NonEmptyStr, Ratings, TimeEvidence, VideoId, VisitStatus
+from shared.schemas.common import (
+    Category,
+    NonEmptyStr,
+    Ratings,
+    TimeEvidence,
+    VideoId,
+    VisitStatus,
+    is_scene_out_of_range,
+)
 from shared.schemas.observation import ObservationResult
 
 MAX_SEARCH_QUERIES = 3
@@ -31,6 +39,13 @@ class PlaceCandidate(AIModel):
     @classmethod
     def _dedupe_refs(cls, value: list[int]) -> list[int]:
         return list(dict.fromkeys(value))
+
+    @field_validator("time_evidence", mode="before")
+    @classmethod
+    def _drop_scene_guesses(cls, value: Any) -> Any:
+        if isinstance(value, list):
+            return [ev for ev in value if not is_scene_out_of_range(ev)]
+        return value
 
     @field_validator("branch_hint", mode="before")
     @classmethod

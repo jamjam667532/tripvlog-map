@@ -108,6 +108,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
   "jobId": "...",
   "status": "QUEUED | RUNNING | SUCCEEDED | PARTIAL | FAILED",
   "progress": { "total": 5, "analyzed": 3, "failed": 0 },
+  "videos": [ { "videoId": "abc", "state": "PENDING | ANALYZING | DONE | FAILED | SKIPPED" } ],
   "result": null
 }
 ```
@@ -140,6 +141,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
 | CoordCache | `placeId` | - | - | `expiresAt` (보조) |
 
 규칙:
+- YoutubeCache 값 필드(결정 0002-3): `SEARCH`/`RESULT`는 `videoIds`, `VIDEO`/`META`는 `channelId, title, description, durationSec, privacyStatus, publishedAt`. 조회수·좋아요 수·구독자 수는 저장하지 않는다.
 - `SEARCH#{hash}`의 hash는 목적지·검색어·정렬·페이지·언어·기간 필터 전체를 정규화해 만든다.
 - Places의 `PLACE` 아이템에는 `videoId`가 없으므로 GSI에 들어가지 않는다(희소 인덱스).
 - `evidenceKey` = `{placeId}#{analysisVersion}#{startSec}`.
@@ -155,7 +157,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
   "guestAccessHash": "sha256-hex | null",
   "status": "QUEUED",
   "request": { "destination": "오사카", "styles": ["맛집"], "companion": "커플" },
-  "videoRefs": [ { "videoId": "abc", "channelId": "ch1", "analysisVersion": "v1-haiku45", "state": "DONE | FAILED | SKIPPED", "error": null } ],
+  "videoRefs": [ { "videoId": "abc", "channelId": "ch1", "analysisVersion": "v1-haiku45", "state": "PENDING | ANALYZING | DONE | FAILED | SKIPPED", "error": null } ],
   "progress": { "total": 5, "analyzed": 4, "failed": 1 },
   "executionArn": "...",
   "resultS3Key": "results/{jobId}/result.json",
@@ -199,7 +201,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
   "ratings": { "overall": "POSITIVE | NEGATIVE | MIXED | NONE | UNDETERMINED", "taste": "...", "price": "...", "wait": "...", "service": "..." },
   "evidenceText": "원문 발화 또는 자막 (최대 200자)",
   "visitTimeEvidence": [
-    { "kind": "SCENE | STATED_TIME | WAIT_EXPERIENCE | CREATOR_TIP", "situation": "OPENING | MORNING | LUNCH_PEAK | AFTERNOON | EVENING | NIGHT | SUNSET | OTHER", "localClockTime": "09:00 | null", "evidenceText": "..." }
+    { "kind": "SCENE | STATED_TIME | WAIT_EXPERIENCE | CREATOR_TIP", "situation": "OPENING | MORNING | LUNCH_PEAK | AFTERNOON | EVENING | NIGHT | SUNSET | DAY | OTHER", "localClockTime": "09:00 | null", "evidenceText": "..." }
   ]
 }
 ```
@@ -294,7 +296,7 @@ class InterpretationResult(BaseModel):
 
 검증 규칙(코드):
 - `clue_refs`가 비어 있거나 범위 밖이면 그 후보는 버린다.
-- `time_evidence.kind == "SCENE"`이면 situation은 DAY/NIGHT 관찰만 허용, `CREATOR_TIP`로 바꾸지 않는다.
+- `time_evidence.kind == "SCENE"`이면 situation은 `DAY | NIGHT`만 허용하고, 다른 값이면 그 시간 근거 항목만 버린다. `CREATOR_TIP`로 바꾸지 않는다. (결정 0002-1)
 - `localClockTime`은 `STATED_TIME`일 때만 허용. 다른 kind면 null로 강제.
 - ratings 값은 Enum 외 값이면 `UNDETERMINED`.
 

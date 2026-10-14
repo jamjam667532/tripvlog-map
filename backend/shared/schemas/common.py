@@ -16,8 +16,18 @@ RatingValue = Literal["POSITIVE", "NEGATIVE", "MIXED", "NONE", "UNDETERMINED"]
 RatingAspect = Literal["taste", "price", "wait", "service"]
 TimeEvidenceKind = Literal["SCENE", "STATED_TIME", "WAIT_EXPERIENCE", "CREATOR_TIP"]
 Situation = Literal[
-    "OPENING", "MORNING", "LUNCH_PEAK", "AFTERNOON", "EVENING", "NIGHT", "SUNSET", "OTHER"
+    "OPENING",
+    "MORNING",
+    "LUNCH_PEAK",
+    "AFTERNOON",
+    "EVENING",
+    "NIGHT",
+    "SUNSET",
+    "DAY",
+    "OTHER",
 ]
+# 결정 0002-1: 장면 관찰(SCENE)은 낮·밤만 말할 수 있다
+SCENE_SITUATIONS: frozenset[str] = frozenset({"DAY", "NIGHT"})
 
 _RATING_VALUES: frozenset[str] = frozenset(get_args(RatingValue))
 _CLOCK_KEYS = ("localClockTime", "local_clock_time")
@@ -77,6 +87,21 @@ class TimeEvidence(CamelModel):
         if isinstance(data, dict) and data.get("kind") != "STATED_TIME":
             data = {k: v for k, v in data.items() if k not in _CLOCK_KEYS}
         return data
+
+    @model_validator(mode="after")
+    def _scene_is_day_or_night(self) -> "TimeEvidence":
+        if self.kind == "SCENE" and self.situation not in SCENE_SITUATIONS:
+            raise ValueError("SCENE evidence allows only DAY or NIGHT situation")
+        return self
+
+
+def is_scene_out_of_range(raw: Any) -> bool:
+    """AI 출력에서 버릴 SCENE 근거인지(낮·밤 외 시간대). 추측성 근거이므로 항목만 버린다."""
+    return (
+        isinstance(raw, dict)
+        and raw.get("kind") == "SCENE"
+        and raw.get("situation") not in SCENE_SITUATIONS
+    )
 
 
 class VideoTimeRange(CamelModel):

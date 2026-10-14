@@ -5,10 +5,12 @@ from typing import Annotated, Literal
 from pydantic import UUID4, Field, StringConstraints, field_validator
 
 from shared.schemas.base import CamelModel
-from shared.schemas.common import ChannelId, Companion, Style
+from shared.schemas.common import ChannelId, Companion, Style, VideoId
 from shared.schemas.result import JobResult
 
 JobStatus = Literal["QUEUED", "RUNNING", "SUCCEEDED", "PARTIAL", "FAILED"]
+# 결정 0002-2: 분석 전 PENDING, 분석 중 ANALYZING
+VideoState = Literal["PENDING", "ANALYZING", "DONE", "FAILED", "SKIPPED"]
 TERMINAL_STATUSES: frozenset[JobStatus] = frozenset({"SUCCEEDED", "PARTIAL", "FAILED"})
 
 MAX_STYLES = 3
@@ -50,10 +52,18 @@ class Progress(CamelModel):
     failed: Annotated[int, Field(ge=0)] = 0
 
 
+class VideoProgress(CamelModel):
+    """진행 화면의 영상별 상태. YouTube 제목·썸네일은 넣지 않는다."""
+
+    video_id: VideoId
+    state: VideoState
+
+
 class GetJobResponse(CamelModel):
     job_id: UUID4
     status: JobStatus
     progress: Progress
+    videos: list[VideoProgress] = Field(default_factory=list)
     result: JobResult | None = None
 
 

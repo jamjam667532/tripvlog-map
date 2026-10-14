@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import UUID4, AwareDatetime, Field, field_validator, model_validator
 
-from shared.schemas.api import JobStatus, Preferences, Progress
+from shared.schemas.api import JobStatus, Preferences, Progress, VideoState
 from shared.schemas.base import CamelModel
 from shared.schemas.common import (
     Category,
@@ -39,8 +39,7 @@ class VideoRef(CamelModel):
     video_id: VideoId
     channel_id: ChannelId
     analysis_version: NonEmptyStr
-    # 분석 전에는 None. TODO(decision 0002): 진행 화면용 대기·분석 중 상태
-    state: Literal["DONE", "FAILED", "SKIPPED"] | None = None
+    state: VideoState = "PENDING"
     error: str | None = None
 
 
@@ -181,7 +180,7 @@ class CoordCacheItem(CamelModel):
 
 
 class YoutubeSearchCacheItem(CamelModel):
-    """pk = SEARCH#{hash}, sk = RESULT. TODO(decision 0002): 저장 필드 확정."""
+    """pk = SEARCH#{hash}, sk = RESULT. 저장 필드는 결정 0002-3."""
 
     pk: Annotated[str, Field(pattern=r"^SEARCH#[0-9a-f]{64}$")]
     sk: Literal["RESULT"] = "RESULT"
@@ -190,9 +189,9 @@ class YoutubeSearchCacheItem(CamelModel):
 
 
 class YoutubeVideoCacheItem(CamelModel):
-    """pk = VIDEO#{videoId}, sk = META. 조회수 등 지표는 점수에 쓰지 않으므로 두지 않는다.
+    """pk = VIDEO#{videoId}, sk = META. 저장 필드는 결정 0002-3.
 
-    TODO(decision 0002): 저장 필드 확정.
+    조회수 등 지표는 점수에 쓰지 않으므로 두지 않는다. 제목·설명란은 스타일 태깅용.
     """
 
     pk: Annotated[str, Field(pattern=r"^VIDEO#[A-Za-z0-9_-]{1,64}$")]

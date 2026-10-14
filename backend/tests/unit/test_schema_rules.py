@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from shared.schemas.api import CreateJobRequest, ErrorResponse, UpdatePreferencesRequest
 from shared.schemas.common import Ratings, TimeEvidence
 from shared.schemas.interpretation import InterpretationResult, link_to_observation
-from shared.schemas.items import CoordCacheItem, JobItem, PlaceEvidenceItem
+from shared.schemas.items import CoordCacheItem, JobItem, PlaceEvidenceItem, VideoRef
 from shared.schemas.observation import ObservationResult
 from shared.schemas.result import EvidenceLink
 
@@ -34,10 +34,13 @@ def _interpretation(*candidates: dict[str, Any]) -> InterpretationResult:
 # ---------- 시간 근거 (spec §5.3, §8 필수 케이스) ----------
 
 
-@pytest.mark.parametrize("kind", ["SCENE", "WAIT_EXPERIENCE", "CREATOR_TIP"])
-def test_local_clock_time_forced_null_unless_stated_time(kind: str) -> None:
+@pytest.mark.parametrize(
+    ("kind", "situation"),
+    [("SCENE", "NIGHT"), ("WAIT_EXPERIENCE", "MORNING"), ("CREATOR_TIP", "OPENING")],
+)
+def test_local_clock_time_forced_null_unless_stated_time(kind: str, situation: str) -> None:
     ev = TimeEvidence.model_validate(
-        {"kind": kind, "situation": "MORNING", "localClockTime": "09:00", "evidenceText": "x"}
+        {"kind": kind, "situation": situation, "localClockTime": "09:00", "evidenceText": "x"}
     )
     assert ev.local_clock_time is None
 
@@ -228,3 +231,44 @@ def test_job_item_never_holds_raw_guest_token() -> None:
                 "updatedAt": "2026-10-14T12:00:00Z",
             }
         )
+
+
+# ---------- 결정 0002 ----------
+
+
+def test_scene_evidence_outside_day_night_is_dropped_from_ai_output() -> None:
+    result = _interpretation(
+        _candidate(
+            time_evidence=[
+                {"kind": "SCENE", "situation": "LUNCH_PEAK", "evidence_text": "가게 안 장면"},
+                {"kind": "SCENE", "situation": "NIGHT", "evidence_text": "야경 장면"},
+                {
+                    "kind": "WAIT_EXPERIENCE",
+                    "situation": "LUNCH_PEAK",
+                    "evidence_text": "40분 대기",
+                },
+            ]
+        )
+    )
+    kept = [(e.kind, e.situation) for e in result.candidates[0].time_evidence]
+    assert kept == [("SCENE", "NIGHT"), ("WAIT_EXPERIENCE", "LUNCH_PEAK")]
+
+
+@pytest.mark.parametrize("situation", ["DAY", "NIGHT"])
+def test_scene_evidence_allows_day_and_night(situation: str) -> None:
+    ev = TimeEvidence.model_validate(
+        {"kind": "SCENE", "situation": situation, "evidenceText": "장면"}
+    )
+    assert ev.situation == situation
+
+
+def test_scene_evidence_with_other_situation_rejected_when_stored() -> None:
+    with pytest.raises(ValidationError, match="DAY or NIGHT"):
+        TimeEvidence.model_validate(
+            {"kind": "SCENE", "situation": "OPENING", "evidenceText": "장면"}
+        )
+
+
+def test_video_ref_starts_pending() -> None:
+    ref = VideoRef.model_validate({"videoId": "abc", "channelId": "ch1", "analysisVersion": "v1"})
+    assert ref.state == "PENDING"
