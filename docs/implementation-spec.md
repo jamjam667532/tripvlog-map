@@ -325,7 +325,7 @@ Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거
   - 시간대 근거: kind·situation별 채널 수, 상충 그대로 나열. "추천" 표현은 CREATOR_TIP이 있거나 같은 방향 WAIT_EXPERIENCE가 2채널 이상일 때만
 - 순위(`rules/ranking.py`): 기본 점수 = 방문 채널 수 + 명시적 긍정 가중. 선호 스타일 일치·참고 채널 방문에 가중치. 조회수 등 API 지표 사용 금지.
 - 지역 묶음: 좌표 기준 간단한 그리드 또는 k-means(numpy). 일자·순서 개념 없음.
-- 결과 JSON을 `results/{jobId}/result.json`에 저장, Jobs 갱신. 실패 영상이 있으면 PARTIAL.
+- 결과 JSON을 `results/{jobId}/result.json`에 저장, Jobs 갱신. 실패 영상이 있으면 PARTIAL. `results/`에는 S3 수명 주기 25일(결정 0002-4).
 
 ### 5.6 cleanup (매일)
 
@@ -363,7 +363,7 @@ Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거
   "jobId": "...", "destination": "오사카", "analyzedChannels": 4, "failedVideos": 1,
   "places": [
     {
-      "placeId": "ChIJ...", "name": "이치란 도톤보리점", "category": "RESTAURANT",
+      "placeId": "ChIJ...", "name": "이치란 · 도톤보리", "category": "RESTAURANT",
       "lat": 34.6687, "lng": 135.5013, "areaGroup": "도톤보리",
       "rank": 1, "matchStatus": "CONFIRMED",
       "channels": { "visited": 4, "denominator": 4 },
@@ -375,7 +375,7 @@ Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거
   "unconfirmed": [ { "names": ["..."], "reason": "MULTIPLE_BRANCHES" } ]
 }
 ```
-좌표는 응답에만 포함하고 프론트에서 저장하지 않는다.
+좌표는 응답에만 포함하고 프론트에서 저장하지 않는다. `name`은 Google 이름이 아니라 영상 기반 표기(영상 이름 + `branch_hint`, 예: "이치란 · 도톤보리")다. 화면의 지점명은 프론트가 `placeId`로 Google에서 받아 표시만 하고, 실패하면 `name`을 보여준다(결정 0002-4).
 
 ---
 

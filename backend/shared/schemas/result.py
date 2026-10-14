@@ -60,6 +60,7 @@ class EvidenceLink(CamelModel):
 
 class ResultPlace(CamelModel):
     place_id: NonEmptyStr
+    # 영상 기반 표기(예: "이치란 · 도톤보리"). Google 이름은 저장하지 않는다(결정 0002-4)
     name: NonEmptyStr
     category: Category
     lat: Annotated[float, Field(ge=-90, le=90)]
