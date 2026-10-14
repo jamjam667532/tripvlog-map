@@ -1,0 +1,5 @@
+{
+  "app": "uv run python -m infra.app",
+  "output": "cdk.out",
+  "watch": { "include": ["infra/**"] }
+}

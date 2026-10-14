@@ -1,0 +1,53 @@
+[project]
+name = "tripvlog-map"
+version = "0.1.0"
+description = "한국어 여행 브이로그 근거를 지도에 보여주는 서버리스 서비스"
+requires-python = ">=3.12,<3.13"
+# Lambda 런타임 의존성. 컨테이너 이미지에는 이 목록만 설치된다.
+dependencies = [
+    "boto3>=1.35",
+    "google-genai>=1.0",
+    "pydantic>=2.9",
+]
+
+[dependency-groups]
+dev = [
+    "boto3-stubs[dynamodb,s3,ssm,stepfunctions,bedrock-runtime]",
+    "moto[dynamodb,s3,ssm,stepfunctions]>=5",
+    "mypy>=1.13",
+    "pre-commit>=4",
+    "pytest>=8",
+    "ruff>=0.8",
+]
+infra = [
+    "aws-cdk-lib>=2.170",
+    "constructs>=10",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev", "infra"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["backend", "."]
+extend-exclude = ["frontend", "cdk.out", "docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["backend", "infra"]
+mypy_path = "backend:."
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+exclude = ["cdk\\.out"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend", "."]
+addopts = "-ra --strict-markers"
+markers = ["integration: DynamoDB Local 등 외부 프로세스가 필요한 테스트"]
