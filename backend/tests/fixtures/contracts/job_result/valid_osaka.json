@@ -2,7 +2,7 @@
   "jobId": "3f2b8c1e-6d4a-4b7e-9c2f-1a2b3c4d5e6f", "destination": "오사카", "analyzedChannels": 4, "failedVideos": 1,
   "places": [
     {
-      "placeId": "ChIJ_ichiran_dotonbori", "name": "이치란 도톤보리점", "category": "RESTAURANT",
+      "placeId": "ChIJ_ichiran_dotonbori", "name": "이치란 · 도톤보리", "category": "RESTAURANT",
       "lat": 34.6687, "lng": 135.5013, "areaGroup": "도톤보리",
       "rank": 1, "matchStatus": "CONFIRMED",
       "channels": { "visited": 4, "denominator": 4 },
