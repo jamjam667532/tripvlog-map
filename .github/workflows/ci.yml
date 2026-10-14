@@ -65,4 +65,6 @@ jobs:
           image-ref: tripvlog-${{ matrix.function }}:ci
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          # 로컬 에뮬레이터(RIE)는 Lambda 실행 환경에서 쓰이지 않고, 베이스 이미지에 포함돼 직접 고칠 수 없다
+          skip-files: /usr/local/bin/aws-lambda-rie
           exit-code: "1"

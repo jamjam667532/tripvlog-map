@@ -2,6 +2,9 @@
 FROM public.ecr.aws/lambda/python:3.12
 
 ARG FUNCTION
+# 베이스 이미지는 출시 시점 릴리스에 고정돼 있으므로 최신 릴리스의 보안 패치를 반영한다 (Trivy HIGH 대응)
+RUN dnf -y --releasever=latest upgrade && dnf clean all
+
 COPY --from=ghcr.io/astral-sh/uv:0.13.1 /uv /bin/uv
 
 COPY pyproject.toml uv.lock /tmp/build/
