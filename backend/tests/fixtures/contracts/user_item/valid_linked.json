@@ -1,0 +1,8 @@
+{
+  "userId": "cognito-sub-1234",
+  "preferences": { "styles": ["맛집"], "companion": "커플", "referenceChannelIds": ["ch1"] },
+  "youtube": {
+    "linked": true, "syncedAt": "2026-10-14T12:00:00Z", "resyncDueAt": "2026-11-08T12:00:00Z",
+    "travelChannelIds": ["ch1"], "likedTravelVideoIds": ["abc"], "styleProfileCandidate": { "맛집": 0.6 }
+  }
+}

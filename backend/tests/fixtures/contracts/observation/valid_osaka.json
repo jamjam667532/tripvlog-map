@@ -1,0 +1,22 @@
+{
+  "video_id": "dQw4w9WgXcQ",
+  "clues": [
+    {
+      "start_sec": 750, "end_sec": 905, "clue_type": "SPEECH",
+      "heard_name": "이치란", "seen_text": null,
+      "utterance": "국물 진짜 맛있는데 40분 기다린 건 좀...",
+      "scene": null, "scene_daypart": "DAY", "uncertainty": []
+    },
+    {
+      "start_sec": 760, "end_sec": 770, "clue_type": "SCREEN_TEXT",
+      "heard_name": null, "seen_text": "一蘭 道頓堀店",
+      "utterance": null, "scene": "가게 간판", "scene_daypart": "DAY", "uncertainty": []
+    },
+    {
+      "start_sec": 1200, "end_sec": 1230, "clue_type": "SCENE",
+      "heard_name": null, "seen_text": null, "utterance": null,
+      "scene": "강가 야경을 보며 걷는 장면", "scene_daypart": "NIGHT",
+      "uncertainty": ["TARGET_AMBIGUOUS"]
+    }
+  ]
+}

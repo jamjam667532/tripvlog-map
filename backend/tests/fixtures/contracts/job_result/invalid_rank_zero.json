@@ -1,0 +1,3 @@
+{ "jobId": "3f2b8c1e-6d4a-4b7e-9c2f-1a2b3c4d5e6f", "destination": "오사카", "analyzedChannels": 1, "failedVideos": 0,
+  "places": [ { "placeId": "p1", "name": "가게", "category": "CAFE", "lat": 34.6, "lng": 135.5, "rank": 0, "matchStatus": "CONFIRMED",
+    "channels": { "visited": 1, "denominator": 1 } } ] }

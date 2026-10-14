@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+# 테스트 fixture의 가짜 값만 허용한다. 폴더 전체를 제외하지 않는다.
+[[allowlists]]
+description = "contract test fixtures: sha256('test') and a dummy base64 string"
+condition = "AND"
+paths = ['''^backend/tests/fixtures/''']
+regexes = [
+  '''^9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08$''',
+  '''^Zm9vYmFyYmF6cXV4cXV1eHF1dXhxdXV4cXV1eHF1dXhxdXV4$''',
+]

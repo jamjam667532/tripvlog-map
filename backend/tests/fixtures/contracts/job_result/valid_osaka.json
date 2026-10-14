@@ -1,0 +1,15 @@
+{
+  "jobId": "3f2b8c1e-6d4a-4b7e-9c2f-1a2b3c4d5e6f", "destination": "오사카", "analyzedChannels": 4, "failedVideos": 1,
+  "places": [
+    {
+      "placeId": "ChIJ_ichiran_dotonbori", "name": "이치란 도톤보리점", "category": "RESTAURANT",
+      "lat": 34.6687, "lng": 135.5013, "areaGroup": "도톤보리",
+      "rank": 1, "matchStatus": "CONFIRMED",
+      "channels": { "visited": 4, "denominator": 4 },
+      "ratings": { "taste": { "positive": 3, "negative": 0, "mixed": 1 }, "wait": { "positive": 1, "negative": 2, "mixed": 0 } },
+      "timeEvidence": [ { "kind": "WAIT_EXPERIENCE", "situation": "OPENING", "channels": 2, "recommend": true } ],
+      "evidence": [ { "channelId": "ch1", "videoId": "dQw4w9WgXcQ", "startSec": 750, "text": "국물 진짜 맛있는데 40분 기다린 건 좀..." } ]
+    }
+  ],
+  "unconfirmed": [ { "names": ["스타벅스"], "reason": "MULTIPLE_BRANCHES" } ]
+}

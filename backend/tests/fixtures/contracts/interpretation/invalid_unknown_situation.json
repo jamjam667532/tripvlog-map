@@ -1,0 +1,3 @@
+{ "video_id": "abc123", "analysis_version": "v1-haiku45",
+  "candidates": [ { "candidate_id": "c1", "names": ["어딘가"], "category": "CAFE", "visit_status": "VISITED", "clue_refs": [0],
+    "time_evidence": [ { "kind": "SCENE", "situation": "DAWN", "evidence_text": "새벽 장면" } ] } ] }

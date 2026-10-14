@@ -1,0 +1,2 @@
+{ "userId": "cognito-sub-1234",
+  "youtube": { "linked": true, "syncedAt": "2026-10-14T12:00:00Z", "resyncDueAt": "2026-11-08T12:00:00Z", "refreshToken": "1//0g-secret" } }

@@ -1,0 +1,6 @@
+{ "videoId": "abc", "analysisVersion": "v1-haiku45", "status": "DONE", "lockOwner": "3f2b8c1e-6d4a-4b7e-9c2f-1a2b3c4d5e6f", "leaseUntil": 1790000000,
+  "channelId": "ch1", "styleTag": "맛집",
+  "observationS3Key": "analysis/abc/v1-haiku45/observation.json",
+  "interpretationS3Key": "analysis/abc/v1-haiku45/interpretation.json",
+  "usage": { "geminiTokens": 16000, "bedrockInputTokens": 1800, "bedrockOutputTokens": 400 },
+  "analyzedAt": "2026-10-14T12:03:00Z", "lastCheckedAt": "2026-10-14T12:03:00Z" }

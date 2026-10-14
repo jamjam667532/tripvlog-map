@@ -1,0 +1,30 @@
+{
+  "video_id": "dQw4w9WgXcQ",
+  "analysis_version": "v1-haiku45",
+  "candidates": [
+    {
+      "candidate_id": "c1",
+      "names": ["이치란", "一蘭"],
+      "branch_hint": "도톤보리",
+      "search_queries": ["一蘭 道頓堀店", "이치란 도톤보리"],
+      "category": "RESTAURANT",
+      "visit_status": "VISITED",
+      "clue_refs": [0, 1],
+      "ratings": { "overall": "MIXED", "taste": "POSITIVE", "price": "NONE", "wait": "NEGATIVE", "service": "NONE" },
+      "time_evidence": [
+        { "kind": "WAIT_EXPERIENCE", "situation": "LUNCH_PEAK", "local_clock_time": null, "evidence_text": "점심에 왔더니 40분 기다렸어요" }
+      ]
+    },
+    {
+      "candidate_id": "c2",
+      "names": ["도톤보리 강변"],
+      "branch_hint": null,
+      "search_queries": ["道頓堀川"],
+      "category": "ATTRACTION",
+      "visit_status": "UNCLEAR",
+      "clue_refs": [2],
+      "ratings": {},
+      "time_evidence": []
+    }
+  ]
+}

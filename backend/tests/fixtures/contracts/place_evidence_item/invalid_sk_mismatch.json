@@ -1,0 +1,34 @@
+{
+  "placeId": "ChIJ_ichiran_dotonbori",
+  "sk": "EVID#ch1#abc#v1-haiku45#751",
+  "videoId": "abc",
+  "channelId": "ch1",
+  "analysisVersion": "v1-haiku45",
+  "evidenceKey": "ChIJ_ichiran_dotonbori#v1-haiku45#750",
+  "visitStatus": "VISITED",
+  "matchStatus": "CONFIRMED",
+  "videoTimeRange": {
+    "startSec": 750,
+    "endSec": 905
+  },
+  "clueTypes": [
+    "SPEECH",
+    "SCREEN_TEXT"
+  ],
+  "ratings": {
+    "overall": "MIXED",
+    "taste": "POSITIVE",
+    "price": "NONE",
+    "wait": "NEGATIVE",
+    "service": "NONE"
+  },
+  "evidenceText": "국물 진짜 맛있는데 40분 기다린 건 좀...",
+  "visitTimeEvidence": [
+    {
+      "kind": "WAIT_EXPERIENCE",
+      "situation": "LUNCH_PEAK",
+      "localClockTime": null,
+      "evidenceText": "점심에 왔더니 40분 기다렸어요"
+    }
+  ]
+}

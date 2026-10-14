@@ -1,0 +1,1 @@
+{ "video_id": "abc123", "clues": [ { "start_sec": 100, "end_sec": 50, "clue_type": "SPEECH" } ] }

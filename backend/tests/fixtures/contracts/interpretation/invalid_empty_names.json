@@ -1,0 +1,2 @@
+{ "video_id": "abc123", "analysis_version": "v1-haiku45",
+  "candidates": [ { "candidate_id": "c1", "names": [], "category": "CAFE", "visit_status": "VISITED", "clue_refs": [0] } ] }

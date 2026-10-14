@@ -1,0 +1,7 @@
+{
+  "video_id": "abc123",
+  "model_note": "Gemini가 덧붙인 키는 무시한다",
+  "clues": [
+    { "start_sec": 0, "end_sec": 10, "clue_type": "SPEECH", "utterance": "여기 아침 9시에 왔어요", "confidence": 0.9 }
+  ]
+}
