@@ -14,6 +14,14 @@ env:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
+    services:
+      # 통합 테스트(backend/tests/integration)는 DYNAMODB_ENDPOINT가 있으면 DynamoDB Local을 쓴다
+      dynamodb-local:
+        image: amazon/dynamodb-local:latest
+        ports:
+          - 8000:8000
+    env:
+      DYNAMODB_ENDPOINT: http://localhost:8000
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

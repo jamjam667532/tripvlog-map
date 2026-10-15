@@ -226,6 +226,15 @@ class YoutubeVideoCacheItem(CamelModel):
     expires_at: EpochSeconds
 
 
+class YoutubeQuotaItem(CamelModel):
+    """pk = QUOTA#{YYYY-MM-DD}(UTC), sk = SEARCH. 일일 search.list 호출 수 (결정 0004-5)."""
+
+    pk: Annotated[str, Field(pattern=r"^QUOTA#\d{4}-\d{2}-\d{2}$")]
+    sk: Literal["SEARCH"] = "SEARCH"
+    count: NonNegative
+    expires_at: EpochSeconds
+
+
 # ---------- Users (2단계) ----------
 
 

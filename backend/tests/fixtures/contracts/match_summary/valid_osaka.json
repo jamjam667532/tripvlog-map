@@ -1,0 +1,9 @@
+{
+  "videoId": "dQw4w9WgXcQ",
+  "analysisVersion": "v1-haiku45",
+  "confirmed": [{ "placeId": "ChIJ_ichiran", "name": "이치란 · 도톤보리", "category": "RESTAURANT" }],
+  "unconfirmed": [
+    { "names": ["스타벅스"], "placeIds": ["ChIJ_sb1", "ChIJ_sb2"], "reason": "MULTIPLE_BRANCHES" }
+  ],
+  "discarded": 1
+}

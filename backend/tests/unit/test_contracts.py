@@ -12,8 +12,10 @@ from _pytest.mark import ParameterSet
 from pydantic import BaseModel, ValidationError
 
 from shared.schemas.api import CreateJobRequest, GetJobResponse
+from shared.schemas.events import FailInput, VideoTask
 from shared.schemas.interpretation import InterpretationResult
 from shared.schemas.items import JobItem, PlaceEvidenceItem, UserItem, VideoAnalysisItem
+from shared.schemas.match import MatchSummary
 from shared.schemas.observation import ObservationResult
 from shared.schemas.result import JobResult
 
@@ -29,6 +31,9 @@ MODELS: dict[str, type[BaseModel]] = {
     "video_analysis_item": VideoAnalysisItem,
     "place_evidence_item": PlaceEvidenceItem,
     "user_item": UserItem,
+    "match_summary": MatchSummary,
+    "video_task": VideoTask,
+    "fail_input": FailInput,
 }
 
 

@@ -1,0 +1,8 @@
+{
+  "jobId": "3f1c2b7e-8a4d-4c1e-9b2a-1d2e3f4a5b6c",
+  "videoId": "dQw4w9WgXcQ",
+  "channelId": "UC_ch1",
+  "analysisVersion": "v1-haiku45",
+  "action": "fail",
+  "error": { "Error": "InvalidModelOutput", "Cause": "{\"errorMessage\": \"...\"}" }
+}
