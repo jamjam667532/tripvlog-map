@@ -2,7 +2,7 @@
 
 이 저장소는 팀원 2명과 여러 코딩 에이전트(Claude Code, Codex, Qwen Code 등)가 함께 작업한다. 이 파일은 **누가 어떤 도구로 들어오든 같은 기준으로 일하게** 하려고 둔다.
 
-> 기준일: 2026-10-15 · 마지막 완료 마일스톤: **M3** · 다음: **M4**
+> 기준일: 2026-10-15 · 마지막 완료 마일스톤: **M4** (결정 0004 확인 대기) · 다음: **M5**
 
 ---
 
@@ -36,13 +36,13 @@
 | M1 | `shared/schemas`: Pydantic 모델 + fixture 계약 테스트 | ✅ 완료 |
 | M2 | `shared/rules`: matching, aggregation, time_evidence, ranking, replacement | ✅ 완료 |
 | M3 | `shared/clients`: youtube, gemini, bedrock, places + `tests/fakes` | ✅ 완료 |
-| **M4** | Lambda 핸들러 + DynamoDB Local 통합 테스트 | ⏳ **다음 (분담 예정, §6)** |
-| M5 | CDK 스택 배포 | 대기 |
+| M4 | Lambda 핸들러 + DynamoDB Local 통합 테스트 | ✅ 완료 (결정 [0004](docs/decisions/0004-M4-핸들러-빈틈.md) 사람 확인 필요) |
+| **M5** | CDK 스택 배포 | ⏳ **다음** |
 | M6 | 프론트 1단계 화면 | 대기 |
 | M7 | 실제 키 검증, 규칙 vs Bedrock 비교 실험 | 대기 |
 | M8 | 로그인·개인화 (2단계) | 대기 |
 
-- 테스트: pytest 185개, vitest 1개 통과. GitHub Actions CI 11개 잡 통과.
+- 테스트: pytest 265개(DynamoDB Local·moto 양쪽), vitest 1개 통과.
 - 저장소: https://github.com/jamjam667532/tripvlog-map (공개)
 - 실제 유료 API(Gemini, Bedrock, Places, YouTube)는 아직 한 번도 호출하지 않았다. M7 전까지 호출하지 않는다.
 
@@ -69,9 +69,12 @@ backend/shared/
 │   ├─ secrets.py  SSM Parameter Store에서 서버 키 읽기
 │   └─ http.py     테스트에서 바꿔 끼우는 HTTP 전송
 ├─ prompts/      observe.md (Gemini), interpret.md (Bedrock)
-└─ repos/        ⏳ 비어 있음 (M4-0)
+├─ repos/        Jobs(낙관적 잠금), VideoAnalysis(조건부 선점), Places, CoordCache, YoutubeCache, S3 BlobStore
+└─ settings.py   환경 변수 설정 (CDK가 infra/config.py 값을 넘긴다)
 
-backend/functions/<name>/handler.py   ⏳ 전부 NotImplementedError 껍데기 (M4)
+backend/functions/<name>/handler.py   collect, claim, observe, interpret, match, aggregate, api_public 구현 (M4)
+                                      api_jobs, api_me(M8), cleanup(M5 이후)은 아직 껍데기
+backend/tests/integration/pipeline.py Step Functions 흐름 흉내 (M5 ASL도 같은 순서·이벤트)
 backend/tests/fakes/                  가짜 클라이언트 (FakeYouTube, FakeGemini, FakeBedrock, FakePlaces)
 backend/tests/fixtures/contracts/     스키마별 valid_*.json / invalid_*.json (파일만 추가하면 자동 검사)
 infra/config.py                       모델 ID·리전·한도 (TODO(verify) 값은 사람이 콘솔에서 확인해 넣는다)
@@ -195,7 +198,7 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 | M4-3 | `match`: 도시 위치 편향, 후보별 Places 검색, `rules.matching`, PLACE·EVID 아이템, CoordCache(25일) | `backend/functions/match/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
 | M4-4 | `aggregate`: 근거 Query(videoId-index), `rules` 집계·순위, 지역 묶음, 결과 JSON → S3, Jobs 갱신, 실패 영상 대체 연결 | `backend/functions/aggregate/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
 | M4-5 | `api_public`: `POST /public/jobs`(requestId 중복 409, guestAccessToken 해시 저장), `GET /public/jobs/{id}`(해시 불일치 404, 상수 시간 비교) | `backend/functions/api_public/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
-| M4-6 | **end-to-end 통합 테스트**: fixture 영상 2개로 collect → aggregate 결과 JSON (완료 조건) | `backend/tests/integration/test_e2e_*.py` | M4-1~5 | claude | 대기 |
+| M4-6 | **end-to-end 통합 테스트**: fixture 영상 2개로 collect → aggregate 결과 JSON (완료 조건) | `backend/tests/integration/test_e2e_*.py` | M4-1~5 | claude | ✅ 완료 |
 
 `cleanup`, `api_jobs`, `api_me`는 M4 범위가 아니다(각각 M5 이후, M8).
 
@@ -210,7 +213,7 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 
 | 질문 | 관련 |
 | --- | --- |
-| `claim`을 별도 Lambda로 둘지, Step Functions의 DynamoDB 직접 연동으로 처리할지. 명세 M4에는 `claim` 핸들러가 있지만 CLAUDE.md의 핸들러 목록에는 없다 | M4-2 시작 전 |
+| 결정 0004 제안 확정 (claim 별도 Lambda, 실패·대체 위치, 매칭 요약 S3, 만료 좌표, 검색 카운터, jobId 결정적 생성 등) | M5 시작 전 |
 | 학교 계정의 허용 US 리전, 각 모델 ID·Converse 지원·구조화 출력 지원 | `infra/config.py` TODO(verify), M5·M7 |
 | Gemini 사용 허용 여부 (불허 시 M7 전에 대체 모드 논의) | spec §12 |
 | 학교 계정 CDK bootstrap·IAM·OIDC 가능 여부 | M5 |
