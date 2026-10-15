@@ -191,7 +191,7 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 | --- | --- | --- | --- | --- | --- |
 | M4-0 | **공통 기반**: `shared/repos` (DynamoDB 6개 테이블·S3 JSON 읽기/쓰기), 테이블 생성 스크립트, 통합 테스트 fixture(DynamoDB Local·moto), **단계 간 이벤트 계약**(`schemas/events.py`: 각 핸들러의 입력·출력) | `backend/shared/repos/**`, `backend/shared/schemas/events.py`, `backend/tests/integration/conftest.py`, `scripts/` | - | claude | ✅ 완료 |
 | M4-1 | `collect`: 검색 3개 → YoutubeCache → 규칙 필터(공개, ≥3분, 최근 2년, 채널당 1개) → 키워드 스타일 태그 → videoRefs 5개 + spareVideos 3개 | `backend/functions/collect/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
-| M4-2 | `claim`·`observe`·`interpret`: VideoAnalysis 조건부 선점(lease 15분), 재사용, 관찰·해석 S3 저장, 실패 처리 | `backend/functions/{claim,observe,interpret}/**`, 관련 테스트 | M4-0 | claude | 대기 |
+| M4-2 | `claim`·`observe`·`interpret`: VideoAnalysis 조건부 선점(lease 15분), 재사용, 관찰·해석 S3 저장, 실패 처리 | `backend/functions/{claim,observe,interpret}/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
 | M4-3 | `match`: 도시 위치 편향, 후보별 Places 검색, `rules.matching`, PLACE·EVID 아이템, CoordCache(25일) | `backend/functions/match/**`, 관련 테스트 | M4-0 | claude | 대기 |
 | M4-4 | `aggregate`: 근거 Query(videoId-index), `rules` 집계·순위, 지역 묶음, 결과 JSON → S3, Jobs 갱신, 실패 영상 대체 연결 | `backend/functions/aggregate/**`, 관련 테스트 | M4-0 | claude | 대기 |
 | M4-5 | `api_public`: `POST /public/jobs`(requestId 중복 409, guestAccessToken 해시 저장), `GET /public/jobs/{id}`(해시 불일치 404, 상수 시간 비교) | `backend/functions/api_public/**`, 관련 테스트 | M4-0 | claude | 대기 |

@@ -11,7 +11,7 @@
 앞 단계 출력이 그대로 다음 단계 입력이 되므로 모르는 키는 무시한다.
 """
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import UUID4, ConfigDict, Field
 
@@ -39,6 +39,10 @@ class VideoTask(EventModel):
     video_id: VideoId
     channel_id: ChannelId
     analysis_version: NonEmptyStr
+
+    def task_fields(self) -> dict[str, Any]:
+        """다음 단계 이벤트를 만들 때 쓰는 공통 필드."""
+        return {name: getattr(self, name) for name in VideoTask.model_fields}
 
 
 class CollectOutput(EventModel):

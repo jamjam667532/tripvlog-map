@@ -9,6 +9,7 @@ FUNCTIONS = [
     "api_jobs",
     "api_me",
     "collect",
+    "claim",
     "observe",
     "interpret",
     "match",

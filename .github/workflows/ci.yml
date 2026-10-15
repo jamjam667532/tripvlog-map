@@ -59,7 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         function:
-          [api_public, api_jobs, api_me, collect, observe, interpret, match, aggregate, cleanup]
+          [api_public, api_jobs, api_me, collect, claim, observe, interpret, match, aggregate, cleanup]
     steps:
       - uses: actions/checkout@v7
       - name: Build Lambda image
