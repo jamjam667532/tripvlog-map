@@ -5,6 +5,7 @@
 - 표시 이름: 영상 표기 + branch_hint (예: "이치란 · 도톤보리", 결정 0002-4)
 """
 
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -49,3 +50,17 @@ def display_name(names: Sequence[str], branch_hint: str | None) -> str:
     if not hint or hint in name:
         return name
     return f"{name} · {hint}"
+
+
+def choose_display_name(named_by: Sequence[tuple[str, str]]) -> str | None:
+    """여러 영상이 같은 장소를 확정했을 때 표기 하나. (channelId, name) 목록.
+
+    가장 많이 나온 표기, 같으면 채널 ID 순으로 먼저 나온 표기(결정 0004-3).
+    """
+    if not named_by:
+        return None
+    counts = Counter(name for _, name in named_by)
+    first_channel: dict[str, str] = {}
+    for channel_id, name in sorted(named_by):
+        first_channel.setdefault(name, channel_id)
+    return min(counts, key=lambda n: (-counts[n], first_channel[n], n))
