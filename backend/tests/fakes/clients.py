@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from shared.clients.bedrock import Interpretation
-from shared.clients.errors import InvalidModelOutput
+from shared.clients.errors import ExternalApiError, InvalidModelOutput
 from shared.clients.gemini import Observation
 from shared.clients.places import MAX_CALLS_PER_CANDIDATE
 from shared.clients.youtube import SEARCH_UNITS, VIDEOS_UNITS, SearchOrder
@@ -92,3 +92,19 @@ class FakePlaces:
             if hits:
                 break
         return hits
+
+
+class FakeStarter:
+    """Step Functions 대신 시작 요청만 기록한다."""
+
+    ARN_PREFIX = "arn:aws:states:us-east-1:000000000000:execution:analyze:"
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.started: list[str] = []
+        self._fail = fail
+
+    def start(self, job_id: str) -> str:
+        if self._fail:
+            raise ExternalApiError("stepfunctions", 500, "fake failure")
+        self.started.append(job_id)
+        return self.ARN_PREFIX + job_id

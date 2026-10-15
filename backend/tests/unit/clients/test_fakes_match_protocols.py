@@ -2,9 +2,10 @@
 
 from shared.clients.bedrock import BedrockInterpreter
 from shared.clients.gemini import GeminiObserver
+from shared.clients.orchestrator import JobStarter, StepFunctionsStarter
 from shared.clients.places import PlacesClient
 from shared.clients.youtube import YouTubeClient
-from tests.fakes import FakeBedrock, FakeGemini, FakePlaces, FakeYouTube
+from tests.fakes import FakeBedrock, FakeGemini, FakePlaces, FakeStarter, FakeYouTube
 
 
 def test_fakes_satisfy_client_protocols() -> None:
@@ -12,4 +13,10 @@ def test_fakes_satisfy_client_protocols() -> None:
     gm: GeminiObserver = FakeGemini({})
     br: BedrockInterpreter = FakeBedrock({})
     pl: PlacesClient = FakePlaces({})
-    assert all((yt, gm, br, pl))
+    st: JobStarter = FakeStarter()
+    assert all((yt, gm, br, pl, st))
+
+
+def test_real_starter_satisfies_protocol() -> None:
+    st: JobStarter = StepFunctionsStarter("arn", client=object())
+    assert st
