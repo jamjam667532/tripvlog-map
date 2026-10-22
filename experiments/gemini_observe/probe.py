@@ -94,6 +94,38 @@ def video_part(video: str, fps: float, clip: list[int] | None) -> types.Part:
     return types.Part(file_data=data, video_metadata=meta)
 
 
+def call(client: genai.Client, model: str, contents: types.Content, config: Any) -> tuple[str, Any]:
+    resp = client.models.generate_content(model=model, contents=contents, config=config)
+    return resp.text or "", resp.usage_metadata
+
+
+def stream(
+    client: genai.Client, model: str, contents: types.Content, config: Any
+) -> tuple[str, Any]:
+    """생각 요약은 회색, 출력 JSON은 그대로 받는 대로 찍는다. 토큰 수는 마지막 조각에 온다."""
+    text, usage, mode = [], None, ""
+    for chunk in client.models.generate_content_stream(
+        model=model, contents=contents, config=config
+    ):
+        usage = chunk.usage_metadata or usage
+        content = chunk.candidates[0].content if chunk.candidates else None
+        for part in (content.parts if content else None) or []:
+            if not part.text:
+                continue
+            now = "thought" if part.thought else "answer"
+            if now != mode:
+                head = "\033[2m── 생각 요약 ──\033[0m" if part.thought else "── 출력 ──"
+                print("\n" + head, flush=True)
+                mode = now
+            if part.thought:
+                print(f"\033[2m{part.text}\033[0m", end="", flush=True)
+            else:
+                text.append(part.text)
+                print(part.text, end="", flush=True)
+    print()
+    return "".join(text), usage
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--tag", required=True)
@@ -105,6 +137,8 @@ def main() -> None:
     p.add_argument("--clip", type=int, nargs=2, metavar=("START", "END"), help="구간(초)")
     p.add_argument("--thinking", default="default", help="default | minimal | low | medium | high")
     p.add_argument("--text-only", action="store_true", help="짧은 텍스트로 모델 응답 여부만 확인")
+    p.add_argument("--stream", action="store_true", help="생각 요약과 출력을 받는 대로 화면에 표시")
+    p.add_argument("--retries", type=int, default=0, help="503·429일 때 재시도 횟수(30·60·120초…)")
     a = p.parse_args()
 
     client = genai.Client(api_key=load_key())
@@ -129,30 +163,40 @@ def main() -> None:
         media_resolution=types.MediaResolution(f"MEDIA_RESOLUTION_{a.res}"),
         http_options=types.HttpOptions(timeout=600_000),
     )
+    thinking: dict[str, Any] = {"include_thoughts": True} if a.stream else {}
     if a.thinking != "default":
-        cfg["thinking_config"] = types.ThinkingConfig(thinking_level=a.thinking)
+        thinking["thinking_level"] = a.thinking
+    if thinking:
+        cfg["thinking_config"] = types.ThinkingConfig(**thinking)
     contents = types.Content(
         role="user",
         parts=[video_part(a.video, a.fps, a.clip), types.Part(text=f"video_id: {a.video}")],
     )
-    try:
-        resp = client.models.generate_content(
-            model=a.model, contents=contents, config=types.GenerateContentConfig(**cfg)
-        )
-    except Exception as e:
-        rec.update(error=f"{type(e).__name__} {str(e)[:200]}", sec=round(time.time() - t0))
-        log(rec)
-        return
+    config = types.GenerateContentConfig(**cfg)
+    for attempt in range(a.retries + 1):
+        try:
+            text, u = (stream if a.stream else call)(client, a.model, contents, config)
+            break
+        except Exception as e:
+            busy = any(code in str(e)[:40] for code in ("503", "429"))
+            if busy and attempt < a.retries:
+                wait = 30 * 2**attempt
+                print(f"[{type(e).__name__} {str(e)[:60]}] {wait}초 뒤 재시도", file=sys.stderr)
+                time.sleep(wait)
+                continue
+            rec.update(error=f"{type(e).__name__} {str(e)[:200]}", sec=round(time.time() - t0))
+            rec.update(attempts=attempt + 1)
+            log(rec)
+            return
 
-    u = resp.usage_metadata
     rec.update(
         sec=round(time.time() - t0),
+        attempts=attempt + 1,
         input=u.prompt_token_count,
         output=u.candidates_token_count,
         thoughts=u.thoughts_token_count or 0,
         total=u.total_token_count,
     )
-    text = resp.text or ""
     OUT.mkdir(exist_ok=True)
     (OUT / f"raw_{a.tag}.txt").write_text(text, encoding="utf-8")
     try:
