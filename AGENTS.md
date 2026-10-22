@@ -214,6 +214,7 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 | 질문 | 관련 |
 | --- | --- |
 | 결정 0004 제안 확정 (claim 별도 Lambda, 실패·대체 위치, 매칭 요약 S3, 만료 좌표, 검색 카운터, jobId 결정적 생성 등) | M5 시작 전 |
+| 결정 [0006](docs/decisions/0006-관찰-품질.md) 제안 확정 (관찰 재생 위치 MM:SS, 프롬프트 v2, 이름 뒷받침 규칙, 지어낸 단서 지표, Gemini 재시도·하루 예산·길이 상한, 설명란·고정 댓글, 해상도·구간 정책). **진행 중 실험의 인계 목록:** [실험 기록](experiments/results/2026-10-21-gemini-observe.md)의 "다음 할 일 (인계)", 스크립트 [experiments/gemini_observe/](experiments/gemini_observe/) | M7 시작 전 |
 | 학교 계정의 허용 US 리전, 각 모델 ID·Converse 지원·구조화 출력 지원 | `infra/config.py` TODO(verify), M5·M7 |
 | Gemini 사용 허용 여부 (불허 시 M7 전에 대체 모드 논의) | spec §12 |
 | 학교 계정 CDK bootstrap·IAM·OIDC 가능 여부 | M5 |
