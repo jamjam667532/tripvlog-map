@@ -11,7 +11,11 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from shared.clients.bedrock import BedrockConverseInterpreter, BedrockInterpreter
+from shared.clients.bedrock import (
+    BedrockConverseInterpreter,
+    BedrockInterpreter,
+    ChunkedInterpreter,
+)
 from shared.repos import Repos, analysis_key, with_metrics
 from shared.schemas.events import InterpretOutput, ObserveOutput
 from shared.schemas.observation import ObservationResult
@@ -66,10 +70,12 @@ def _deps() -> Deps:
     return Deps(
         settings=s,
         repos=Repos.from_settings(s),
-        bedrock=BedrockConverseInterpreter(
-            require(s.bedrock_interpreter_model_id, "BEDROCK_INTERPRETER_MODEL_ID"),
-            region=s.bedrock_region,
-            structured_output=s.bedrock_structured_output,
+        bedrock=ChunkedInterpreter(  # 구간 관찰로 단서가 많아 출력 한도를 넘지 않게 나눠 해석
+            BedrockConverseInterpreter(
+                require(s.bedrock_interpreter_model_id, "BEDROCK_INTERPRETER_MODEL_ID"),
+                region=s.bedrock_region,
+                structured_output=s.bedrock_structured_output,
+            )
         ),
     )
 

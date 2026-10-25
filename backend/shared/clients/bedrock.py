@@ -10,6 +10,7 @@
 import json
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -226,3 +227,63 @@ class GatewayChatInterpreter:
                 link_to_observation(parsed, observation), input_tokens, output_tokens
             )
         raise InvalidModelOutput("llm-gateway", MAX_ATTEMPTS)
+
+
+class ChunkedInterpreter:
+    """단서가 많으면 나눠 해석하고 합친다.
+
+    학교 게이트웨이는 출력을 4,096토큰에서 자른다(2026-10-25 확인, finish_reason=length).
+    구간 관찰로 단서가 200~300개가 되면 해석 JSON이 잘려 매번 실패한다. 그래서 단서를
+    max_clues개씩 차례로 나눠 각각 해석하고, clue_refs는 전체 관찰 기준 번호로 되돌린다.
+    일부 묶음이 실패해도 나머지로 결과를 만들고, 모두 실패하면 예외. 묶음 경계에 걸친 장소는
+    후보가 둘로 나뉠 수 있지만 [2-4] 매칭에서 같은 placeId로 모인다.
+    """
+
+    def __init__(self, inner: BedrockInterpreter, *, max_clues: int = 80, max_workers: int = 4):
+        self._inner = inner
+        self._max_clues = max_clues
+        self._max_workers = max_workers
+
+    def __repr__(self) -> str:
+        return f"ChunkedInterpreter({self._inner!r}, max_clues={self._max_clues})"
+
+    def interpret(self, observation: ObservationResult, analysis_version: str) -> Interpretation:
+        clues = observation.clues
+        if len(clues) <= self._max_clues:
+            return self._inner.interpret(observation, analysis_version)
+        starts = list(range(0, len(clues), self._max_clues))
+        parts = [
+            observation.model_copy(update={"clues": clues[s : s + self._max_clues]}) for s in starts
+        ]
+
+        def one(part: ObservationResult) -> Interpretation | None:
+            try:
+                return self._inner.interpret(part, analysis_version)
+            except InvalidModelOutput:
+                return None
+
+        with ThreadPoolExecutor(self._max_workers) as pool:
+            results = list(pool.map(one, parts))
+        if not any(results):
+            raise InvalidModelOutput("llm-gateway", MAX_ATTEMPTS)
+        candidates = []
+        for n, (offset, r) in enumerate(zip(starts, results, strict=True)):
+            if r is None:
+                continue
+            for c in r.result.candidates:
+                candidates.append(
+                    c.model_copy(
+                        update={
+                            "candidate_id": f"p{n + 1}-{c.candidate_id}",
+                            "clue_refs": [offset + i for i in c.clue_refs],
+                        }
+                    )
+                )
+        merged = InterpretationResult(
+            video_id=observation.video_id, analysis_version=analysis_version, candidates=candidates
+        )
+        return Interpretation(
+            link_to_observation(merged, observation),
+            sum(r.input_tokens for r in results if r),
+            sum(r.output_tokens for r in results if r),
+        )

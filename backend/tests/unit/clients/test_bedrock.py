@@ -133,3 +133,38 @@ def test_throttling_is_external_error(client: Any) -> None:
         with pytest.raises(ExternalApiError) as e:
             BedrockConverseInterpreter("test-model", client=client).interpret(OBS, "v1")
     assert e.value.status == 429
+
+
+def test_chunked_interpreter_splits_and_restores_clue_refs() -> None:
+    from shared.clients.bedrock import ChunkedInterpreter, Interpretation
+    from shared.schemas.interpretation import InterpretationResult
+    from shared.schemas.observation import ObservationResult
+
+    clues = [
+        {"start_sec": i, "end_sec": i, "clue_type": "SCREEN_TEXT", "seen_text": f"가게{i}"}
+        for i in range(5)
+    ]
+    obs = ObservationResult.model_validate({"video_id": "vid", "clues": clues})
+    seen: list[int] = []
+
+    class Inner:
+        def interpret(self, o: ObservationResult, version: str) -> Interpretation:
+            seen.append(len(o.clues))
+            cand = {
+                "candidate_id": "c1",
+                "names": [o.clues[-1].seen_text],
+                "category": "RESTAURANT",
+                "visit_status": "VISITED",
+                "clue_refs": [len(o.clues) - 1],  # 묶음 안 번호
+            }
+            res = InterpretationResult.model_validate(
+                {"video_id": o.video_id, "analysis_version": version, "candidates": [cand]}
+            )
+            return Interpretation(res, 10, 5)
+
+    out = ChunkedInterpreter(Inner(), max_clues=2).interpret(obs, "v")
+    assert seen == [2, 2, 1]
+    assert [c.clue_refs for c in out.result.candidates] == [[1], [3], [4]]  # 전체 번호로
+    assert [c.names[0] for c in out.result.candidates] == ["가게1", "가게3", "가게4"]
+    assert len({c.candidate_id for c in out.result.candidates}) == 3
+    assert (out.input_tokens, out.output_tokens) == (30, 15)

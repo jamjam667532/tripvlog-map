@@ -37,7 +37,7 @@ from functions.interpret import handler as interpret_fn
 from functions.match import handler as match_fn
 from functions.observe import handler as observe_fn
 from functions.observe.handler import video_duration
-from shared.clients.bedrock import BedrockInterpreter, GatewayChatInterpreter
+from shared.clients.bedrock import BedrockInterpreter, ChunkedInterpreter, GatewayChatInterpreter
 from shared.clients.errors import ExternalApiError
 from shared.clients.gemini import (
     GeminiObserver,
@@ -349,8 +349,10 @@ def main() -> None:
             youtube=YouTubeDataApi(env["YOUTUBE_API_KEY"]),
             gemini=gemini,
             places=PlacesTextSearch(env["PLACES_API_KEY"]),
-            llm=GatewayChatInterpreter(
-                a.llm_model, api_key=env["LLM_API_KEY"], base_url=env["LLM_BASE_URL"]
+            llm=ChunkedInterpreter(  # 게이트웨이 출력 4,096토큰 한도 → 단서 80개씩
+                GatewayChatInterpreter(
+                    a.llm_model, api_key=env["LLM_API_KEY"], base_url=env["LLM_BASE_URL"]
+                )
             ),
         )
         pipeline = LocalPipeline(settings, clients, a.concurrency)
