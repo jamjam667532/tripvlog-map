@@ -2,7 +2,8 @@
 
 > 대상 독자: 이 저장소에서 코드를 작성하는 Claude Code(Opus)와 팀원.
 > 기획 배경과 근거는 `docs/기획서.md`, 프로젝트 규칙은 루트 `CLAUDE.md`를 따른다.
-> 기준일: 2026-10-14. 모델 ID·한도·가격은 바뀔 수 있으므로 `TODO(verify)` 표시가 있는 값은 콘솔에서 확인한 뒤 설정 파일에 넣는다.
+> 기준일: 2026-10-14 (2026-10-25 결정 0007 반영: 서울 리전, 학교 LLM 게이트웨이, Cognito·SSM·CDK 없음).
+> 처리 순서 요약은 `docs/pipeline.md`. 모델 ID·한도·가격은 바뀔 수 있으므로 `TODO(verify)` 표시가 있는 값은 콘솔에서 확인한 뒤 설정 파일에 넣는다.
 
 ---
 
@@ -27,7 +28,7 @@
 | 단계 | 내용 |
 | --- | --- |
 | 1단계 (첫 검증) | 비로그인 경로만. 목적지·스타일·동행 입력, 영상 5개 순차 분석, 지도 출력, 규칙 vs Bedrock 비교 실험 |
-| 2단계 | Cognito Google 로그인, `/me/preferences`, 유튜브 1회 연결, 개인 순위 재계산 |
+| 2단계 | Google 로그인(ID 토큰 + JWT Authorizer, 결정 0007-2), `/me/preferences`, 유튜브 1회 연결, 개인 순위 재계산 |
 
 ---
 
@@ -38,8 +39,8 @@ Browser (React SPA)
   ├─ CloudFront ─┬─ S3 (정적 파일, OAC, 비공개)
   │              └─ /api/* → API Gateway HTTP API (캐시 끔)
   │                   ├─ /public/*      → Lambda api_public   (인증 없음, 요청 제한)
-  │                   ├─ /jobs, /jobs/* → Lambda api_jobs     (Cognito JWT)
-  │                   └─ /me/*          → Lambda api_me       (Cognito JWT)
+  │                   ├─ /jobs, /jobs/* → Lambda api_jobs     (Google ID 토큰 JWT)
+  │                   └─ /me/*          → Lambda api_me       (Google ID 토큰 JWT)
   └─ Maps JavaScript API (브라우저 지도 키, 도메인 제한)
 
 api_public / api_jobs ── StartExecution(name=jobId) ──▶ Step Functions "analyze"
@@ -47,7 +48,7 @@ api_public / api_jobs ── StartExecution(name=jobId) ──▶ Step Functions
   2. Map(videoRefs, MaxConcurrency=1 초기값)
        ├─ claim      (VideoAnalysis 조건부 선점 / 재사용 / 대기)
        ├─ observe    (Gemini, 예약 동시성으로 전역 제한)
-       ├─ interpret  (Bedrock Converse, Pydantic 검증)
+       ├─ interpret  (Bedrock, 학교 LLM 게이트웨이 경유, Pydantic 검증)
        └─ match      (Places Text Search + 규칙 매칭)
      영상별 Catch → 실패 기록, 다른 영상은 계속
   3. aggregate   (채널별 집계, 시간대 근거, 순위, 결과 JSON → S3)
@@ -60,7 +61,7 @@ EventBridge Scheduler (매일) → Lambda cleanup (만료 캐시·연결 데이�
 `infra/config.py` (환경별 값):
 
 ```python
-REGION = "us-east-1"                      # TODO(verify): 학교 계정에서 허용된 US 리전
+REGION = "ap-northeast-2"                 # 서울 고정 (결정 0007-1). Bedrock 리전은 게이트웨이가 정한다
 BEDROCK_INTERPRETER_MODEL_ID = "..."      # TODO(verify): Claude Haiku 4.5 모델 ID 또는 추론 프로파일(us. 접두사)
 BEDROCK_COMPARE_MODEL_ID = "..."          # TODO(verify): GPT 5.6 Luna 모델 ID
 GEMINI_MODEL = "..."                      # TODO(verify): 무료 티어에서 YouTube URL 입력을 지원하는 Flash 계열
@@ -71,7 +72,7 @@ COORD_TTL_DAYS = 25
 YOUTUBE_CACHE_TTL_DAYS = 25               # 30일 이내 갱신·삭제 운영안
 ```
 
-Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만 바꿔 쓴다. 모델이 Converse를 지원하지 않으면 어댑터에서 InvokeModel로 분기한다.
+Bedrock은 학교 LLM 게이트웨이(OpenAI 호환 chat.completions)로 부르고 모델은 별칭(`bedrock-haiku` 등)으로 바꿔 쓴다(결정 0007-1). 키·주소는 설정 버킷 `keys.json`.
 
 ---
 
@@ -131,7 +132,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
 
 | 테이블 | PK | SK | GSI | TTL 속성 |
 | --- | --- | --- | --- | --- |
-| Users | `userId` (Cognito sub) | - | - | - (연결 데이터는 cleanup이 속성 REMOVE) |
+| Users | `userId` (`google:` + Google ID 토큰 sub) | - | - | - (연결 데이터는 cleanup이 속성 REMOVE) |
 | Jobs | `jobId` | - | `requestId-index` (PK requestId) | - |
 | YoutubeCache | `pk` (`SEARCH#{hash}` / `VIDEO#{videoId}`) | `sk` (`RESULT` / `META`) | - | `expiresAt` (보조) |
 | VideoAnalysis | `videoId` | `analysisVersion` | - | - |
@@ -151,7 +152,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
 {
   "jobId": "uuid",
   "requestId": "uuid",
-  "userId": "cognito-sub | null",
+  "userId": "google:<sub> | null",
   "guestAccessHash": "sha256-hex | null",
   "status": "QUEUED",
   "request": { "destination": "오사카", "styles": ["맛집"], "companion": "커플" },
@@ -210,7 +211,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
 
 ```json
 {
-  "userId": "cognito-sub",
+  "userId": "google:<sub>",
   "preferences": { "styles": ["맛집"], "companion": "커플", "referenceChannelIds": ["ch1"] },
   "youtube": {
     "linked": true, "syncedAt": "ISO8601", "resyncDueAt": "ISO8601(+25일)",
@@ -397,7 +398,7 @@ Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거
 | --- | --- | --- |
 | 단위 | rules/ (matching, aggregation, time_evidence, ranking), schemas 검증 | pytest |
 | 계약 | Gemini·Bedrock 출력 fixture → Pydantic 통과/실패 케이스 | pytest |
-| 통합 | DynamoDB Local + moto(S3, SSM) 로 collect→aggregate 흐름, 외부 API는 fake client | pytest |
+| 통합 | DynamoDB Local + moto(S3) 로 collect→aggregate 흐름, 외부 API는 fake client | pytest |
 | 프론트 | 결과 렌더링, 폴링 종료, 표현 규칙 | Vitest |
 | 스모크 (배포 후) | `/public/jobs` 접수 → 캐시된 fixture 목적지로 조회 | GitHub Actions |
 
@@ -424,9 +425,8 @@ Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거
 
 ## 10. CI/CD
 
-- `ci.yml` (PR): ruff, mypy, eslint, tsc, pytest, vitest, Lambda 이미지 빌드, Trivy 스캔, `cdk synth`. AWS 자격증명이 필요한 `cdk diff`는 내부 브랜치에서만.
-- `deploy.yml` (main): OIDC로 AWS 인증 → 이미지 SHA 태그로 ECR 푸시 → `cdk deploy` → 프론트 빌드·S3 업로드·CloudFront 무효화 → 스모크 테스트(fixture, 유료 호출 없음).
-- 학교 계정에서 OIDC·CDK bootstrap이 막히면: CI는 검사만, 배포는 허용된 로컬 자격증명으로. IAM 자체가 막히면 사람에게 알린다.
+- `ci.yml` (PR): ruff, mypy, eslint, tsc, pytest, vitest, Lambda 공통 zip 빌드(artifact).
+- 배포(결정 0007-5): 학교 계정에 Access Key·OIDC·CloudFormation이 없어 자동 배포는 없다. 사람이 CI artifact zip을 받아 콘솔에서 올린다(`docs/deploy-runbook.md`). CloudShell 스크립트 초안은 `infra/deploy/`(보류).
 
 ---
 
@@ -441,18 +441,18 @@ Haiku 프롬프트 요지 (`backend/shared/prompts/interpret.md`): 관찰 근거
 | M2 | `shared/rules` (matching, aggregation, time_evidence, ranking) 순수 함수 + 필수 테스트 케이스 | §8 필수 케이스 중 규칙 관련 전부 통과 |
 | M3 | `shared/clients` (youtube, gemini, bedrock, places) + fake 구현 | fake로 통합 테스트 가능 |
 | M4 | Lambda 핸들러 collect·claim·observe·interpret·match·aggregate + DynamoDB Local 통합 테스트 | fixture 영상 2개로 end-to-end 결과 JSON 생성 |
-| M5 | CDK 스택 (DynamoDB, S3, Lambda 이미지, Step Functions, HTTP API `/public/*`, CloudFront, Scheduler) | `cdk synth` 통과, 학교 계정 최소 배포 성공 |
+| M5 | 배포: Lambda zip 빌드(CI), Step Functions ASL, 설정 버킷 키 읽기, 게이트웨이 해석 클라이언트, 콘솔 runbook (결정 0007) | 학교 계정 최소 배포 성공 |
 | M6 | 프론트 1단계 화면 (입력·진행·결과 지도) | 배포 환경에서 fixture 목적지 결과 표시 |
 | M7 | 실제 키로 영상 1개 → 5개 검증, `experiments/run_compare.py` | 실험 결과 문서 작성 |
-| M8 (2단계) | Cognito, `/jobs`, `/me/*`, 유튜브 1회 연결, rerank | 소유자 확인·토큰 미저장 테스트 통과 |
+| M8 (2단계) | Google ID 토큰 JWT Authorizer, `/jobs`, `/me/*`, 유튜브 1회 연결, rerank | 소유자 확인·토큰 미저장 테스트 통과 |
 
 ---
 
 ## 12. 사람에게 확인받아야 하는 것
 
 - Gemini 사용 허용 여부 (불허 시 M7 전에 중단하고 대체 모드 논의)
-- 학교 계정의 허용 US 리전, 각 모델 ID·Converse 지원·추론 프로파일
-- 학교 계정 CDK bootstrap·IAM 역할 생성·OIDC 가능 여부
+- 학교 LLM 게이트웨이: 구조화 출력 지원, Lambda(서울)에서 연결, 키 한도 (결정 0007-1)
+- 학교 계정에서 콘솔로 리소스 생성 권한 (첫 배포에서 확인)
 - Google Cloud 프로젝트(YouTube Data API, Places, Maps JS 키) 결제·상한 설정
 - YouTube 메타데이터 기반 스타일 분류·개인화의 정책 이용 범위
 - 첫 검증 도시와 영상 5개

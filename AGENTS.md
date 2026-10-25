@@ -2,7 +2,7 @@
 
 이 저장소는 팀원 2명과 여러 코딩 에이전트(Claude Code, Codex, Qwen Code 등)가 함께 작업한다. 이 파일은 **누가 어떤 도구로 들어오든 같은 기준으로 일하게** 하려고 둔다.
 
-> 기준일: 2026-10-15 · 마지막 완료 마일스톤: **M4** · 다음: **M5**
+> 기준일: 2026-10-25 · 마지막 완료 마일스톤: **M4** · 다음: **M5** (M6 프론트는 다른 세션이 `claude/m6-frontend`에서 진행 중) · 결정 0008 제안 확인 대기
 
 ---
 
@@ -12,9 +12,10 @@
 | --- | --- | --- |
 | 1 | `AGENTS.md` (이 파일) | 현재 상태, 협업 규칙, 작업 분담 |
 | 2 | [`CLAUDE.md`](CLAUDE.md) | **프로젝트 규칙 원본.** 확정 결정, 코딩 규칙, 금지 사항. 도구 이름과 상관없이 모든 에이전트가 따른다 |
-| 3 | [`docs/implementation-spec.md`](docs/implementation-spec.md) | 구현 명세 (API 계약, 데이터 모델, 파이프라인, 마일스톤) |
-| 4 | [`docs/decisions/`](docs/decisions/) | 확정된 결정 기록. 명세와 다르면 결정 기록이 최신이다 |
-| 5 | [`docs/기획서.md`](docs/기획서.md) | 기획 배경 (필요할 때만) |
+| 3 | [`docs/pipeline.md`](docs/pipeline.md) | **처리 순서 한눈에 보기.** 코드 첫 줄의 `[1]`, `[2-2]` 같은 단계 번호의 뜻 |
+| 4 | [`docs/implementation-spec.md`](docs/implementation-spec.md) | 구현 명세 (API 계약, 데이터 모델, 파이프라인, 마일스톤) |
+| 5 | [`docs/decisions/`](docs/decisions/) | 확정된 결정 기록. 명세와 다르면 결정 기록이 최신이다 |
+| 6 | [`docs/기획서.md`](docs/기획서.md) | 기획 배경 (필요할 때만) |
 
 규칙이 충돌하면 **CLAUDE.md → docs/decisions → implementation-spec → 기획서** 순서로 따른다. 이 파일은 CLAUDE.md를 요약·보조할 뿐이고, 내용이 다르면 CLAUDE.md가 맞다.
 
@@ -38,13 +39,13 @@
 | M3 | `shared/clients`: youtube, gemini, bedrock, places + `tests/fakes` | ✅ 완료 |
 | M4 | Lambda 핸들러 + DynamoDB Local 통합 테스트 | ✅ 완료 |
 | **M5** | 배포: zip 빌드(CI) + Step Functions ASL + 콘솔 runbook + 첫 배포 (결정 0007) | ⏳ **다음** |
-| M6 | 프론트 1단계 화면 | 대기 |
+| M6 | 프론트 1단계 화면 | 🔄 진행 중 (`claude/m6-frontend`, 다른 세션) |
 | M7 | 실제 키 검증, 규칙 vs Bedrock 비교 실험 | 대기 |
 | M8 | 로그인·개인화 (2단계) | 대기 |
 
 - 테스트: pytest 265개(DynamoDB Local·moto 양쪽), vitest 1개 통과.
 - 저장소: https://github.com/jamjam667532/tripvlog-map (공개)
-- 실제 유료 API(Gemini, Bedrock, Places, YouTube)는 아직 한 번도 호출하지 않았다. M7 전까지 호출하지 않는다.
+- 실제 API는 **실험 스크립트에서만** 호출했다(Gemini·YouTube, 2026-10-21~25, `experiments/gemini_observe/`, 결과는 `experiments/results/`). Bedrock·Places는 아직 호출하지 않았다. 테스트에서는 절대 호출하지 않는다.
 
 ### 구현돼 있는 것 (재사용할 것)
 
@@ -184,28 +185,18 @@ M4-1 collect 핸들러
 
 ---
 
-## 6. M4 작업 분담 (제안)
+## 6. 브랜치 현황 (2026-10-25, 아직 아무것도 push·병합하지 않음)
 
-M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (DynamoDB Local + moto S3, 외부 API는 fakes).
+`main`에는 M3까지만 있다. 그 뒤 작업은 아래처럼 **차례로 쌓인 로컬 브랜치**에 있다. 이어서 작업할 때는 맨 끝 브랜치에서 새 브랜치를 딴다.
 
-**M4-0이 먼저 병합돼야** 나머지를 병렬로 진행할 수 있다.
+| 순서 | 브랜치 | 내용 |
+| --- | --- | --- |
+| 1 | `claude/m4-0-repos` … `claude/m4-6-e2e` | M4 (repos, 핸들러 6개, end-to-end 테스트). M4 분담표는 git 기록에 있다 |
+| 2 | `claude/0006-observe-quality` | 결정 0004·0006·0007 확정, Gemini 실험 스크립트·기록, CloudShell 스크립트 초안 |
+| 3 | **`claude/pipeline-doc`** (맨 끝) | `docs/pipeline.md`, 단계 번호 라벨, Nova 등 못 쓰는 모델 정리, 문서 갱신 |
+| 별도 | `claude/m6-frontend` | `main`에서 딴 프론트 작업(다른 세션). 병합 전에 3번 위로 rebase 필요 |
 
-| ID | 작업 | 고칠 수 있는 파일 | 의존 | 담당 | 상태 |
-| --- | --- | --- | --- | --- | --- |
-| M4-0 | **공통 기반**: `shared/repos` (DynamoDB 6개 테이블·S3 JSON 읽기/쓰기), 테이블 생성 스크립트, 통합 테스트 fixture(DynamoDB Local·moto), **단계 간 이벤트 계약**(`schemas/events.py`: 각 핸들러의 입력·출력) | `backend/shared/repos/**`, `backend/shared/schemas/events.py`, `backend/tests/integration/conftest.py`, `scripts/` | - | claude | ✅ 완료 |
-| M4-1 | `collect`: 검색 3개 → YoutubeCache → 규칙 필터(공개, ≥3분, 최근 2년, 채널당 1개) → 키워드 스타일 태그 → videoRefs 5개 + spareVideos 3개 | `backend/functions/collect/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
-| M4-2 | `claim`·`observe`·`interpret`: VideoAnalysis 조건부 선점(lease 15분), 재사용, 관찰·해석 S3 저장, 실패 처리 | `backend/functions/{claim,observe,interpret}/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
-| M4-3 | `match`: 도시 위치 편향, 후보별 Places 검색, `rules.matching`, PLACE·EVID 아이템, CoordCache(25일) | `backend/functions/match/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
-| M4-4 | `aggregate`: 근거 Query(videoId-index), `rules` 집계·순위, 지역 묶음, 결과 JSON → S3, Jobs 갱신, 실패 영상 대체 연결 | `backend/functions/aggregate/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
-| M4-5 | `api_public`: `POST /public/jobs`(requestId 중복 409, guestAccessToken 해시 저장), `GET /public/jobs/{id}`(해시 불일치 404, 상수 시간 비교) | `backend/functions/api_public/**`, 관련 테스트 | M4-0 | claude | ✅ 완료 |
-| M4-6 | **end-to-end 통합 테스트**: fixture 영상 2개로 collect → aggregate 결과 JSON (완료 조건) | `backend/tests/integration/test_e2e_*.py` | M4-1~5 | claude | ✅ 완료 |
-
-`cleanup`, `api_jobs`, `api_me`는 M4 범위가 아니다(각각 M5 이후, M8).
-
-### 반드시 들어가야 할 테스트 (spec §8 중 M4 몫)
-- 같은 영상 동시 요청 → Gemini 1회만 호출 (M4-2, `FakeGemini.calls`로 확인)
-- guestAccessToken 불일치 → 404 (M4-5)
-- 영상 1개 FAILED → 다른 영상은 계속, 결과 PARTIAL (M4-4·M4-6)
+M4 완료 시 "반드시 들어가야 할 테스트"(같은 영상 동시 요청 → Gemini 1회, 토큰 불일치 404, 영상 1개 실패 → PARTIAL)는 모두 통과한다.
 
 ---
 
@@ -213,6 +204,7 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 
 | 질문 | 관련 |
 | --- | --- |
+| 결정 0008 제안 확정 (미리 분석 + 실시간 1~2개로 1분 안에 지도 표시, 목적지 무관 영상 거르기) | M5·M6 |
 | 학교 LLM 게이트웨이: 구조화 출력 지원, Lambda(서울)에서 연결, 키 한도 (결정 0007-1 TODO) | M5·M7 |
 | Gemini 사용 허용 여부 (불허 시 M7 전에 대체 모드 논의) | spec §12 |
 | 학교 계정에서 콘솔로 테이블·함수·상태 머신 생성 권한 (첫 배포에서 확인) | M5 |
@@ -226,9 +218,9 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 
 | 번호 | 핵심 |
 | --- | --- |
-| [0001](docs/decisions/0001-핵심-결정.md) | 동선·일정 없음, 로그인 선택(경로 분리), OAuth 토큰 미저장, guestAccessToken 해시만 저장, 시간 근거 4종 구분, Bedrock US 단일 리전 |
+| [0001](docs/decisions/0001-핵심-결정.md) | 동선·일정 없음, 로그인 선택(경로 분리), OAuth 토큰 미저장, guestAccessToken 해시만 저장, 시간 근거 4종 구분 (Bedrock US 단일 리전은 0007이 대체) |
 | [0002](docs/decisions/0002-M1-스키마-빈틈.md) | SCENE은 DAY/NIGHT만 · 영상 상태 PENDING/ANALYZING 추가 + 조회 응답 `videos` · YoutubeCache 필드 · 결과 `name`은 영상 기반 표기, 화면 지점명은 Google에서 실시간 · 실패 영상은 Bedrock 1회 재요청 → 예비 영상 대체(작업당 1개) |
 | [0003](docs/decisions/0003-M2-규칙-빈틈.md) | 평가는 VISITED만 · 방문 기반 시간 근거는 VISITED만(CREATOR_TIP 예외) · 대기 방향은 `ratings.wait` · 대체 성공 시 SUCCEEDED · 스타일↔분류 매핑 · 언급만 된 장소는 순위 제외 |
 | [0004](docs/decisions/0004-M4-핸들러-빈틈.md) | claim 별도 Lambda(실패 기록 포함) · 대체 영상은 aggregate · 영상별 매칭 요약 S3 · 좌표 만료 장소는 지도에서 제외 · YouTube 검색 하루 90회 · jobId는 requestId에서 결정적 생성 |
-| [0006](docs/decisions/0006-관찰-품질.md) | 관찰 재생 위치는 \"MM:SS\" 문자열 · 프롬프트 v2 + 배경 간판 금지 · 이름 뒷받침 규칙 C(약하면 미확정) · 지어낸 단서 지표 · Gemini 재시도·하루 예산 18·길이 30분 · 설명란·고정 댓글 근거 · LOW·전체 영상 |
+| [0006](docs/decisions/0006-관찰-품질.md) | 관찰 재생 위치는 "MM:SS" 문자열 · 프롬프트 v2 + 배경 간판 금지 · 이름 뒷받침 규칙 C(약하면 미확정) · 지어낸 단서 지표 · Gemini 재시도·하루 예산 18·길이 30분 · 설명란·고정 댓글 근거 · LOW·전체 영상 |
 | [0007](docs/decisions/0007-학교-AWS-계정-제약.md) | 서울 리전 · Bedrock은 학교 게이트웨이(`bedrock-haiku`) · 1단계 게스트만, M8은 Google ID 토큰 JWT(Cognito 없음) · 키는 설정 버킷 · `sgu-clicktotrip-` 접두사 · 배포는 zip + 콘솔 직접 |
