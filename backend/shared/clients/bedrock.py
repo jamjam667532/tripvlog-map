@@ -155,6 +155,13 @@ class GatewayChatInterpreter:
         self._timeout = timeout_sec
         self._max_tokens = max_tokens
         self._sleep = sleep
+        # 게이트웨이는 구조화 출력 강제를 아직 확인하지 못했으므로 스키마를 프롬프트로 준다
+        schema = json.dumps(ai_json_schema(InterpretationResult), ensure_ascii=False)
+        self._system = (
+            load_prompt("interpret")
+            + "\n\n## 출력 JSON 스키마 (반드시 이 형식 그대로, JSON 하나만 출력)\n"
+            + schema
+        )
 
     def __repr__(self) -> str:
         return f"GatewayChatInterpreter(model={self._model!r})"
@@ -163,7 +170,7 @@ class GatewayChatInterpreter:
         body = {
             "model": self._model,
             "messages": [
-                {"role": "system", "content": load_prompt("interpret")},
+                {"role": "system", "content": self._system},
                 {"role": "user", "content": user_text},
             ],
             "temperature": 0.0,

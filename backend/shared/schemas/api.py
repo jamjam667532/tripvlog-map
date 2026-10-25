@@ -65,6 +65,8 @@ class GetJobResponse(CamelModel):
     progress: Progress
     videos: list[VideoProgress] = Field(default_factory=list)
     result: JobResult | None = None
+    # PARTIAL_LIVE: 진행 중 중간 결과(끝난 영상만), FINAL: 최종 결과. 결과가 없으면 None
+    result_stage: Literal["PARTIAL_LIVE", "FINAL"] | None = None
 
 
 class RerankRequest(Preferences):

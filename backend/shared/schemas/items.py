@@ -73,6 +73,7 @@ class JobItem(CamelModel):
     progress: Progress = Field(default_factory=Progress)
     execution_arn: str | None = None
     result_s3_key: str | None = None
+    live_result_s3_key: str | None = None  # 진행 중 중간 결과 (aggregate action=snapshot)
     metrics: JobMetrics = Field(default_factory=JobMetrics)
     created_at: AwareDatetime
     updated_at: AwareDatetime

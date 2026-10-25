@@ -6,6 +6,9 @@ action=replace
 action=aggregate (기본)
   DONE 영상의 근거(videoId-index)와 매칭 요약으로 채널 단위 집계·시간대 근거·순위·지역 묶음을
   만들고 결과 JSON을 S3 results/{jobId}/result.json에 쓴다. 조회수 등 API 지표는 쓰지 않는다.
+action=snapshot
+  같은 집계를 지금까지 끝난(DONE) 영상만으로 만들어 results/{jobId}/live.json에 쓴다.
+  상태·진행 중 영상은 건드리지 않는다. 분모는 끝난 영상의 채널뿐이다("지금까지 분석한 N개 채널").
 """
 
 from collections import defaultdict
@@ -17,7 +20,7 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 
-from shared.repos import Repos, analysis_key, result_key, with_refs
+from shared.repos import Repos, analysis_key, live_result_key, result_key, with_refs
 from shared.rules.aggregation import aggregate_places, job_status, successful_channels
 from shared.rules.area import area_groups
 from shared.rules.evidence import choose_display_name
@@ -125,10 +128,10 @@ def _finish_pending(job: JobItem) -> JobItem:
     return with_refs(job, refs)
 
 
-def aggregate(job_id: str, deps: Deps) -> AggregateOutput:
+def build_result(job: JobItem, deps: Deps, now: datetime) -> JobResult:
+    """job.video_refs 중 DONE 영상으로 결과 JSON을 만든다(쓰기 없음)."""
     repos = deps.repos
-    now = deps.clock()
-    job = repos.jobs.mutate(job_id, _finish_pending, now)
+    job_id = str(job.job_id)
     refs = job.video_refs
     done = [r for r in refs if r.state == "DONE"]
 
@@ -192,7 +195,7 @@ def aggregate(job_id: str, deps: Deps) -> AggregateOutput:
             )
         )
 
-    result = JobResult(
+    return JobResult(
         job_id=job_id,
         destination=job.request.destination,
         analyzed_channels=len(successful_channels(refs)),
@@ -200,6 +203,25 @@ def aggregate(job_id: str, deps: Deps) -> AggregateOutput:
         places=places,
         unconfirmed=_unconfirmed([s for _, s in summaries]),
     )
+
+
+def snapshot(job_id: str, deps: Deps) -> AggregateOutput:
+    repos = deps.repos
+    now = deps.clock()
+    job = repos.jobs.require(job_id)
+    key = repos.blobs.put_model(live_result_key(job_id), build_result(job, deps, now))
+    repos.jobs.mutate(
+        job_id, lambda j: j.model_copy(update={"live_result_s3_key": key}), deps.clock()
+    )
+    return AggregateOutput(job_id=job.job_id, status=job.status, result_s3_key=key)
+
+
+def aggregate(job_id: str, deps: Deps) -> AggregateOutput:
+    repos = deps.repos
+    now = deps.clock()
+    job = repos.jobs.mutate(job_id, _finish_pending, now)
+    refs = job.video_refs
+    result = build_result(job, deps, now)
     key = repos.blobs.put_model(result_key(job_id), result)
     status = job_status(refs)
     elapsed = max(0, int((now - job.created_at).total_seconds()))
@@ -215,6 +237,8 @@ def aggregate(job_id: str, deps: Deps) -> AggregateOutput:
 def run(event: AggregateInput, deps: Deps) -> ReplaceOutput | AggregateOutput:
     if event.action == "replace":
         return replace(str(event.job_id), deps)
+    if event.action == "snapshot":
+        return snapshot(str(event.job_id), deps)
     return aggregate(str(event.job_id), deps)
 
 

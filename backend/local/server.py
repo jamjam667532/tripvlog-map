@@ -2,6 +2,7 @@
 
 - API: api_public 핸들러를 그대로 쓴다(POST /public/jobs, GET /public/jobs/{jobId}).
 - 파이프라인: Step Functions 대신 스레드에서 같은 순서로 돌린다. 영상은 동시에(결정 0008 제안).
+  영상 하나가 끝날 때마다 aggregate(snapshot)로 중간 결과를 써서 화면이 끝난 영상부터 지도에 그린다.
 - 저장: moto(메모리) DynamoDB·S3. 서버를 끄면 사라진다. 켜 둔 동안은 분석한 영상을 재사용한다.
 - 키: --env-file의 GEMINI_API_KEY, YOUTUBE_API_KEY, PLACES_API_KEY, LLM_API_KEY, LLM_BASE_URL.
   SSM·S3 설정 버킷을 쓰지 않는다. 키 값은 출력하지 않는다.
@@ -36,7 +37,8 @@ from functions.interpret import handler as interpret_fn
 from functions.match import handler as match_fn
 from functions.observe import handler as observe_fn
 from shared.clients.bedrock import BedrockInterpreter, GatewayChatInterpreter
-from shared.clients.gemini import GeminiObserver, GeminiYouTubeObserver
+from shared.clients.errors import ExternalApiError
+from shared.clients.gemini import GeminiObserver, GeminiYouTubeObserver, Observation
 from shared.clients.places import PlacesClient, PlacesTextSearch
 from shared.clients.youtube import YouTubeClient, YouTubeDataApi
 from shared.repos import Repos
@@ -84,6 +86,28 @@ class Clients:
     llm: BedrockInterpreter
 
 
+class ThrottledObserver:
+    """Gemini 무료 한도(분당 요청·토큰) 대비: 전역 동시 호출 제한 + 429·503 재시도."""
+
+    RETRY_DELAYS = (10.0, 20.0, 40.0)
+
+    def __init__(self, inner: GeminiObserver, max_concurrent: int) -> None:
+        self._inner = inner
+        self._gate = threading.Semaphore(max_concurrent)
+
+    def observe(self, video_id: str) -> Observation:
+        for delay in (*self.RETRY_DELAYS, None):
+            try:
+                with self._gate:
+                    return self._inner.observe(video_id)
+            except ExternalApiError as e:
+                if e.status not in (429, 503) or delay is None:
+                    raise
+                logger.info("video %s: gemini %s, retry in %.0fs", video_id, e.status, delay)
+                time.sleep(delay)
+        raise AssertionError("unreachable")
+
+
 def _json(model: Any) -> dict[str, Any]:
     out: dict[str, Any] = model.model_dump(mode="json")
     return out
@@ -96,6 +120,7 @@ class LocalPipeline:
         self._s = settings
         self._c = clients
         self._concurrency = concurrency
+        self._snapshot_lock = threading.Lock()  # 같은 live.json을 동시에 쓰지 않게
 
     def _repos(self) -> Repos:
         return Repos.from_settings(self._s)
@@ -143,6 +168,18 @@ class LocalPipeline:
             error = {"Error": type(e).__name__, "Cause": str(e)}
             claim_fn.run({**task, "action": "fail", "error": error}, claim)
 
+    def _video_then_snapshot(self, task: dict[str, Any]) -> None:
+        """영상 하나가 끝나면(성공·실패 모두) 지금까지 결과를 live.json으로 내보낸다."""
+        self._run_video(task)
+        try:
+            with self._snapshot_lock:
+                aggregate_fn.run(
+                    AggregateInput.model_validate({"jobId": task["jobId"], "action": "snapshot"}),
+                    aggregate_fn.Deps(self._s, self._repos()),
+                )
+        except Exception as e:
+            logger.warning("snapshot after %s failed: %s", task["videoId"], e)
+
     def run(self, job_id: str) -> None:
         t0 = time.monotonic()
         repos = self._repos()
@@ -155,7 +192,7 @@ class LocalPipeline:
             refs = _json(collected)["videoRefs"]
             logger.info("job %s: %d videos", job_id, len(refs))
             with ThreadPoolExecutor(self._concurrency) as pool:
-                list(pool.map(self._run_video, refs))
+                list(pool.map(self._video_then_snapshot, refs))
             agg = aggregate_fn.Deps(self._s, repos)
             while True:
                 replaced = aggregate_fn.run(
@@ -164,7 +201,7 @@ class LocalPipeline:
                 assert isinstance(replaced, ReplaceOutput)
                 if replaced.replacement is None:
                     break
-                self._run_video(_json(replaced.replacement))
+                self._video_then_snapshot(_json(replaced.replacement))
             aggregate_fn.run(AggregateInput.model_validate({"jobId": job_id}), agg)
             logger.info("job %s: done in %.0fs", job_id, time.monotonic() - t0)
         except Exception:
@@ -234,7 +271,8 @@ def main() -> None:
     p.add_argument("--thinking", default="low", help="minimal | low | medium | high | none")
     p.add_argument("--clip-sec", type=int, default=300, help="0이면 전체 영상")
     p.add_argument("--llm-model", default="bedrock-haiku")
-    p.add_argument("--concurrency", type=int, default=5)
+    p.add_argument("--concurrency", type=int, default=5, help="동시에 처리할 영상 수")
+    p.add_argument("--gemini-concurrency", type=int, default=2, help="Gemini 동시 호출 수")
     a = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
@@ -254,12 +292,15 @@ def main() -> None:
     )
     clients = Clients(
         youtube=YouTubeDataApi(env["YOUTUBE_API_KEY"]),
-        gemini=GeminiYouTubeObserver(
-            a.gemini_model,
-            api_key=env["GEMINI_API_KEY"],
-            media_resolution=settings.gemini_media_resolution,
-            thinking_level=None if a.thinking == "none" else a.thinking,
-            clip_sec=a.clip_sec or None,
+        gemini=ThrottledObserver(
+            GeminiYouTubeObserver(
+                a.gemini_model,
+                api_key=env["GEMINI_API_KEY"],
+                media_resolution=settings.gemini_media_resolution,
+                thinking_level=None if a.thinking == "none" else a.thinking,
+                clip_sec=a.clip_sec or None,
+            ),
+            a.gemini_concurrency,
         ),
         places=PlacesTextSearch(env["PLACES_API_KEY"]),
         llm=GatewayChatInterpreter(
