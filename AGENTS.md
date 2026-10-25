@@ -2,7 +2,7 @@
 
 이 저장소는 팀원 2명과 여러 코딩 에이전트(Claude Code, Codex, Qwen Code 등)가 함께 작업한다. 이 파일은 **누가 어떤 도구로 들어오든 같은 기준으로 일하게** 하려고 둔다.
 
-> 기준일: 2026-10-15 · 마지막 완료 마일스톤: **M4** (결정 0004 확인 대기) · 다음: **M5**
+> 기준일: 2026-10-15 · 마지막 완료 마일스톤: **M4** · 다음: **M5**
 
 ---
 
@@ -36,7 +36,7 @@
 | M1 | `shared/schemas`: Pydantic 모델 + fixture 계약 테스트 | ✅ 완료 |
 | M2 | `shared/rules`: matching, aggregation, time_evidence, ranking, replacement | ✅ 완료 |
 | M3 | `shared/clients`: youtube, gemini, bedrock, places + `tests/fakes` | ✅ 완료 |
-| M4 | Lambda 핸들러 + DynamoDB Local 통합 테스트 | ✅ 완료 (결정 [0004](docs/decisions/0004-M4-핸들러-빈틈.md) 사람 확인 필요) |
+| M4 | Lambda 핸들러 + DynamoDB Local 통합 테스트 | ✅ 완료 |
 | **M5** | CDK 스택 배포 | ⏳ **다음** |
 | M6 | 프론트 1단계 화면 | 대기 |
 | M7 | 실제 키 검증, 규칙 vs Bedrock 비교 실험 | 대기 |
@@ -213,7 +213,6 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 
 | 질문 | 관련 |
 | --- | --- |
-| 결정 0004 제안 확정 (claim 별도 Lambda, 실패·대체 위치, 매칭 요약 S3, 만료 좌표, 검색 카운터, jobId 결정적 생성 등) | M5 시작 전 |
 | 결정 [0006](docs/decisions/0006-관찰-품질.md) 제안 확정 (관찰 재생 위치 MM:SS, 프롬프트 v2, 이름 뒷받침 규칙, 지어낸 단서 지표, Gemini 재시도·하루 예산·길이 상한, 설명란·고정 댓글, 해상도·구간 정책). **진행 중 실험의 인계 목록:** [실험 기록](experiments/results/2026-10-21-gemini-observe.md)의 "다음 할 일 (인계)", 스크립트 [experiments/gemini_observe/](experiments/gemini_observe/) | M7 시작 전 |
 | 학교 계정의 허용 US 리전, 각 모델 ID·Converse 지원·구조화 출력 지원 | `infra/config.py` TODO(verify), M5·M7 |
 | Gemini 사용 허용 여부 (불허 시 M7 전에 대체 모드 논의) | spec §12 |
@@ -230,3 +229,4 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 | [0001](docs/decisions/0001-핵심-결정.md) | 동선·일정 없음, 로그인 선택(경로 분리), OAuth 토큰 미저장, guestAccessToken 해시만 저장, 시간 근거 4종 구분, Bedrock US 단일 리전 |
 | [0002](docs/decisions/0002-M1-스키마-빈틈.md) | SCENE은 DAY/NIGHT만 · 영상 상태 PENDING/ANALYZING 추가 + 조회 응답 `videos` · YoutubeCache 필드 · 결과 `name`은 영상 기반 표기, 화면 지점명은 Google에서 실시간 · 실패 영상은 Bedrock 1회 재요청 → 예비 영상 대체(작업당 1개) |
 | [0003](docs/decisions/0003-M2-규칙-빈틈.md) | 평가는 VISITED만 · 방문 기반 시간 근거는 VISITED만(CREATOR_TIP 예외) · 대기 방향은 `ratings.wait` · 대체 성공 시 SUCCEEDED · 스타일↔분류 매핑 · 언급만 된 장소는 순위 제외 |
+| [0004](docs/decisions/0004-M4-핸들러-빈틈.md) | claim 별도 Lambda(실패 기록 포함) · 대체 영상은 aggregate · 영상별 매칭 요약 S3 · 좌표 만료 장소는 지도에서 제외 · YouTube 검색 하루 90회 · jobId는 requestId에서 결정적 생성 |
