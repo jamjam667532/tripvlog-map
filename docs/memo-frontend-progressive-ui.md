@@ -1,6 +1,6 @@
 # 프론트 세션에 묻는 메모: 결과를 단계적으로 보여 주는 화면이 가능한가 (2026-10-25)
 
-> 보내는 쪽: Gemini 관찰 최적화 세션(브랜치 `claude/pipeline-doc`). 받는 쪽: M6 프론트 세션(`claude/m6-frontend`).
+> 보내는 쪽: Gemini 관찰 최적화 세션(브랜치 `feature/observe-pipeline`). 받는 쪽: M6 프론트 세션(`claude/m6-frontend`).
 > 근거: `experiments/results/gemini-observe-history.md`, 결정 0008(제안, `docs/decisions/0008-실시간-분석-1분.md`).
 
 ## 왜 묻나

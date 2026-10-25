@@ -5,7 +5,7 @@
 
 ## 1. 시작 지점
 
-- **브랜치:** `claude/pipeline-doc`에서 새 브랜치를 딴다(예: `codex/label-1-backend`). `main`·`claude/m6-frontend`에는 M4 코드가 없어 핸들러가 빈 틀이다. 거기서 시작하면 안 된다.
+- **브랜치:** `feature/observe-pipeline`에서 새 브랜치를 딴다(예: `codex/label-1-backend`). `main`·`claude/m6-frontend`에는 M4 코드가 없어 핸들러가 빈 틀이다. 거기서 시작하면 안 된다.
 - **이미 된 것(1차, 커밋 `6b067c9`):** 아래 26개 파일의 docstring 첫 줄에 단계 번호를 붙였다.
   - `backend/functions/*/handler.py` 10개
   - `backend/shared/clients/` 6개(orchestrator, youtube, gemini, bedrock, places, secrets)

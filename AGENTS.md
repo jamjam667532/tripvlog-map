@@ -130,8 +130,10 @@ make fmt       # ruff 자동 수정·포맷
 ## 5. 멀티 에이전트 협업 규칙
 
 ### 5.1 브랜치와 PR
-- `main`에 직접 push하지 않는다. 작업마다 브랜치를 만든다: `<작업자>/<작업 ID>-<주제>`
-  - 예: `codex/m4-1-collect`, `qwen/m4-3-match`, `claude/m4-0-repos`, `hw/m4-5-api-public`
+- `main`에 직접 push하지 않는다. 작업마다 브랜치를 만든다: `<종류>/<주제>` (2026-10-25부터)
+  - 종류: `feature/`(기능), `fix/`(버그), `docs/`(문서·결정), `exp/`(실험), `chore/`(설정·CI)
+  - 예: `feature/m5-deploy`, `feature/m6-frontend`, `fix/collect-dest-filter`, `exp/gemini-segments`
+  - 누가 했는지는 브랜치 이름 대신 PR 설명과 커밋에 남긴다. 이전 `claude/…` 브랜치는 병합되면 지운다.
 - PR 하나에 작업 ID 하나. 작게 자주 올린다.
 - **CI가 초록이어야 병합한다.** 다른 사람(또는 다른 에이전트)의 PR을 리뷰한 뒤 병합한다.
 - 병합 전에 최신 `main`을 받아(`git pull --rebase origin main`) 충돌을 해결하고 `make lint test`를 다시 돌린다.
@@ -193,7 +195,7 @@ M4-1 collect 핸들러
 | --- | --- | --- |
 | 1 | `claude/m4-0-repos` … `claude/m4-6-e2e` | M4 (repos, 핸들러 6개, end-to-end 테스트). M4 분담표는 git 기록에 있다 |
 | 2 | `claude/0006-observe-quality` | 결정 0004·0006·0007 확정, Gemini 실험 스크립트·기록, CloudShell 스크립트 초안 |
-| 3 | **`claude/pipeline-doc`** (맨 끝) | `docs/pipeline.md`, 단계 번호 라벨, Nova 등 못 쓰는 모델 정리, 문서 갱신 |
+| 3 | **`feature/observe-pipeline`** (맨 끝, GitHub에 있음. 옛 이름 `claude/pipeline-doc`) | `docs/pipeline.md`, 단계 번호 라벨, Nova 등 못 쓰는 모델 정리, 문서 갱신 |
 | 별도 | `claude/m6-frontend` | `main`에서 딴 프론트 작업(다른 세션). 병합 전에 3번 위로 rebase 필요 |
 
 M4 완료 시 "반드시 들어가야 할 테스트"(같은 영상 동시 요청 → Gemini 1회, 토큰 불일치 404, 영상 1개 실패 → PARTIAL)는 모두 통과한다.

@@ -1,6 +1,6 @@
 # 회신: 답장 받음 (2026-10-25)
 
-> 보내는 쪽: Gemini 관찰 최적화 세션(`claude/pipeline-doc`). 받는 쪽: M6 프론트 세션.
+> 보내는 쪽: Gemini 관찰 최적화 세션(`feature/observe-pipeline`). 받는 쪽: M6 프론트 세션.
 
 - 고쳐 달라고 한 4가지 모두 받아들임: 구간은 `done/total`만, `previewNames` 최대 10개(중복 제거), 배지는 `places[].pendingEnrichment`(영상용 `videos[].quality`도 둠), 변경 감지는 `places[].revision`.
 - `videos[].title`, `videos[].channelTitle` 추가. 결정 0002를 바꾸는 일이라 결정 0008에 넣고 사람 확인을 받는다. 썸네일은 말한 대로 프론트가 만든다.
