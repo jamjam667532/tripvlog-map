@@ -43,11 +43,15 @@ class GeminiYouTubeObserver:
         client: Any = None,
         timeout_sec: float = 600.0,
         media_resolution: str = "MEDIA_RESOLUTION_LOW",
+        thinking_level: str | None = None,
+        clip_sec: int | None = None,
     ) -> None:
+        """thinking_level·clip_sec는 결정 0008(제안)의 빠른 모드. None이면 모델 기본·전체 영상."""
         if client is None and api_key is None:
             raise ValueError("api_key or client is required")
         self._client = client or genai.Client(api_key=api_key)
         self._model = model
+        self._clip_sec = clip_sec
         self._config = types.GenerateContentConfig(
             system_instruction=load_prompt("observe"),
             temperature=0.0,
@@ -55,6 +59,11 @@ class GeminiYouTubeObserver:
             response_json_schema=ai_json_schema(ObservationResult),
             media_resolution=types.MediaResolution(media_resolution),
             http_options=types.HttpOptions(timeout=int(timeout_sec * 1000)),
+            thinking_config=(
+                types.ThinkingConfig(thinking_level=types.ThinkingLevel(thinking_level.upper()))
+                if thinking_level
+                else None
+            ),
         )
 
     def __repr__(self) -> str:
@@ -64,7 +73,14 @@ class GeminiYouTubeObserver:
         contents = types.Content(
             role="user",
             parts=[
-                types.Part(file_data=types.FileData(file_uri=youtube_url(video_id))),
+                types.Part(
+                    file_data=types.FileData(file_uri=youtube_url(video_id)),
+                    video_metadata=(
+                        types.VideoMetadata(start_offset="0s", end_offset=f"{self._clip_sec}s")
+                        if self._clip_sec
+                        else None
+                    ),
+                ),
                 types.Part(text=f"video_id: {video_id}"),
             ],
         )
