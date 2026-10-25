@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import boto3
 
-from shared.repos.blobs import BlobStore, analysis_key, result_key
+from shared.repos.blobs import BlobStore, analysis_key, live_result_key, result_key
 from shared.repos.caches import CoordCacheRepo, YoutubeCacheRepo, search_hash
 from shared.repos.jobs import JobNotFound, JobsRepo, with_metrics, with_ref_state, with_refs
 from shared.repos.places import PlacesRepo
@@ -27,6 +27,7 @@ __all__ = [
     "VideoAnalysisRepo",
     "YoutubeCacheRepo",
     "analysis_key",
+    "live_result_key",
     "result_key",
     "search_hash",
     "with_metrics",

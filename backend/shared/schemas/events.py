@@ -92,7 +92,8 @@ class MatchOutput(VideoTask):
 
 class AggregateInput(EventModel):
     job_id: UUID4
-    action: Literal["replace", "aggregate"] = "aggregate"
+    # snapshot: 끝난 영상만으로 중간 결과를 쓴다(상태는 바꾸지 않음). 진행 중 지도 표시용
+    action: Literal["replace", "aggregate", "snapshot"] = "aggregate"
 
 
 class ReplaceOutput(EventModel):

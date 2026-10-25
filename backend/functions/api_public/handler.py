@@ -141,9 +141,13 @@ def get_job(event: dict[str, Any], deps: Deps) -> dict[str, Any]:
     if not hmac.compare_digest(hash_token(token), job.guest_access_hash):
         return _not_found()
 
-    result = None
+    result, stage = None, None
     if job.status in TERMINAL_STATUSES and job.result_s3_key:
-        result = deps.repos.blobs.get_model(job.result_s3_key, JobResult)
+        result, stage = deps.repos.blobs.get_model(job.result_s3_key, JobResult), "FINAL"
+    elif job.status not in TERMINAL_STATUSES and job.live_result_s3_key:
+        # 진행 중에는 끝난 영상만으로 만든 중간 결과를 준다(aggregate action=snapshot)
+        result = deps.repos.blobs.get_model(job.live_result_s3_key, JobResult)
+        stage = "PARTIAL_LIVE"
     return _response(
         200,
         GetJobResponse(
@@ -152,6 +156,7 @@ def get_job(event: dict[str, Any], deps: Deps) -> dict[str, Any]:
             progress=job.progress,
             videos=[VideoProgress(video_id=r.video_id, state=r.state) for r in job.video_refs],
             result=result,
+            result_stage=stage,
         ),
     )
 

@@ -20,6 +20,11 @@ def result_key(job_id: str) -> str:
     return f"results/{job_id}/result.json"
 
 
+def live_result_key(job_id: str) -> str:
+    """진행 중 중간 결과(지금까지 끝난 영상만). 최종 결과와 따로 둔다."""
+    return f"results/{job_id}/live.json"
+
+
 class BlobStore:
     def __init__(self, client: "S3Client", bucket: str) -> None:
         self._s3 = client
