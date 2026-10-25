@@ -19,6 +19,7 @@ describe("youtubeLink", () => {
 describe("formatChannelSample", () => {
   it("표본 수를 항상 함께 보여준다", () => {
     expect(formatChannelSample(4, 5)).toBe("분석 성공 5개 채널 중 4개 방문");
+    expect(formatChannelSample(2, 3, true)).toBe("지금까지 분석한 3개 채널 중 2개 방문");
   });
 });
 

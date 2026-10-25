@@ -8,7 +8,7 @@ import ResultView from "./components/ResultView";
 import { clearGuestJob, loadGuestJob, saveGuestJob, type GuestJob } from "./session";
 import { TERMINAL_STATUSES, type CreateJobRequest } from "./types";
 
-const POLL_MS = 3000;
+const POLL_MS = 2000; // 진행 중 결과를 단계적으로 받는다(메모 답장 2번)
 const MAX_WAIT_MS = 10 * 60 * 1000;
 
 export default function App({ api = defaultApi }: { api?: Api }) {
@@ -96,8 +96,14 @@ export default function App({ api = defaultApi }: { api?: Api }) {
           </div>
           <JobForm onSubmit={(req) => create.mutate(req)} submitting={create.isPending} error={createError} />
         </main>
-      ) : terminal && result ? (
-        <ResultView result={result} demo={api.mode === "mock"} onReset={reset} />
+      ) : result ? (
+        <ResultView
+          result={result}
+          stage={job.data?.resultStage}
+          videos={job.data?.videos ?? []}
+          demo={api.mode === "mock"}
+          onReset={reset}
+        />
       ) : terminal ? (
         <main className="flex flex-1 flex-col items-center justify-center gap-4 px-4">
           <p className="text-lg font-bold text-[#14213D]">분석에 실패했습니다</p>

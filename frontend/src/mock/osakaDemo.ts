@@ -11,13 +11,40 @@ const CH = {
   e: "UCgfI3loFgEUQ1jpwxTv3fTg", // j310ARBk0G4
 } as const;
 
-export const DEMO_VIDEO_IDS = [
-  "ec6YBcndc4w",
-  "drcqsb-G7yI",
-  "vghwtv344yI",
-  "cxC8L8ua3z4",
-  "j310ARBk0G4",
-] as const;
+// 제목은 YouTube에서 받은 실제 값(osaka5.json). ec6YBcndc4w는 제목을 저장해 두지 않아 비워 둔다.
+// fullAt: 좋은 모델로 분석이 끝나는 논리 시각(초). 그 전에는 미리보기(평가 보강 중).
+export const DEMO_VIDEOS: readonly {
+  videoId: string;
+  title?: string;
+  channelTitle: string;
+  fullAt: number;
+}[] = [
+  { videoId: "ec6YBcndc4w", channelTitle: "채널 A", fullAt: 30 },
+  {
+    videoId: "drcqsb-G7yI",
+    title: "가챠에 십만원 태운 사람 보셨어요…? 저는 봤어요. 오백만원 쓴 오사카 여행브이로그",
+    channelTitle: "채널 B",
+    fullAt: 30,
+  },
+  {
+    videoId: "vghwtv344yI",
+    title: "[SUB] 오사카에서 배 터지게 먹방 찍고 온 2일 vlog 맛집 다 털어버림..",
+    channelTitle: "채널 C",
+    fullAt: 60,
+  },
+  {
+    videoId: "cxC8L8ua3z4",
+    title: "\"1년에 250만명\" 세계에서 한국인이 가장 많이 여행가는 해외여행지 1위",
+    channelTitle: "채널 D",
+    fullAt: 60,
+  },
+  {
+    videoId: "j310ARBk0G4",
+    title: "오사카 여행 브이로그 2박3일 오사카 산책 난바 · 모토커피 · 나카자키초 · 우메키타 공원 피크닉",
+    channelTitle: "채널 E",
+    fullAt: 120,
+  },
+];
 
 const DENOMINATOR = 5;
 const ch = (visited: number) => ({ visited, denominator: DENOMINATOR });

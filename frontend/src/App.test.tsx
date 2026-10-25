@@ -8,12 +8,12 @@ import { createMockApi } from "./mock/mockApi";
 // jsdom에서는 Google 지도를 띄우지 않는다
 vi.mock("./components/MapPanel", () => ({ default: () => <div data-testid="map" /> }));
 
-function renderApp(stepMs: number) {
+function renderApp(secondMs: number) {
   sessionStorage.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <App api={createMockApi({ stepMs })} />
+      <App api={createMockApi({ secondMs })} />
     </QueryClientProvider>,
   );
 }

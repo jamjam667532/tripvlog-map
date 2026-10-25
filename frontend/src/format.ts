@@ -64,9 +64,11 @@ export function youtubeLink(videoId: string, startSec: number): string {
   return `https://youtu.be/${encodeURIComponent(videoId)}?t=${Math.max(0, Math.floor(startSec))}`;
 }
 
-/** 표본 수를 항상 함께: "분석 성공 5개 채널 중 4개 방문" */
-export function formatChannelSample(visited: number, denominator: number): string {
-  return `분석 성공 ${denominator}개 채널 중 ${visited}개 방문`;
+/** 표본 수를 항상 함께: "분석 성공 5개 채널 중 4개 방문". 진행 중에는 분모가 바뀌므로 "지금까지". */
+export function formatChannelSample(visited: number, denominator: number, live = false): string {
+  return live
+    ? `지금까지 분석한 ${denominator}개 채널 중 ${visited}개 방문`
+    : `분석 성공 ${denominator}개 채널 중 ${visited}개 방문`;
 }
 
 /** "추천"은 aggregate가 recommend를 준 경우만. 그 외는 "영상 속 경험" / "영상 속 … 장면". */
@@ -86,3 +88,6 @@ export function formatRating(aspect: RatingAspect, r: RatingCount): string | nul
   if (r.mixed) parts.push(`혼합 ${r.mixed}`);
   return parts.length ? `${ASPECT_LABEL[aspect]} ${parts.join(" · ")}` : null;
 }
+
+/** YouTube 썸네일. 영상 ID로 만들 수 있어 응답 필드가 필요 없다. */
+export const thumbnailUrl = (videoId: string) => `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/mqdefault.jpg`;

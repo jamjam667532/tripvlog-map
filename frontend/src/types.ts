@@ -47,9 +47,19 @@ export interface Progress {
   failed: number;
 }
 
+// 아래 선택 필드는 단계적 결과 화면용 제안(docs/memo-frontend-progressive-ui-reply.md).
+// 백엔드가 아직 보내지 않으므로 모두 선택이다.
+export type VideoQuality = "PREVIEW" | "FULL";
+export type ResultStage = "PARTIAL_LIVE" | "FINAL";
+
 export interface VideoProgress {
   videoId: string;
   state: VideoState;
+  title?: string;
+  channelTitle?: string;
+  segments?: { total: number; done: number };
+  previewNames?: string[]; // 확인 전 이름(Gemini 원문). 지도·장소 카드에 쓰지 않는다
+  quality?: VideoQuality;
 }
 
 export interface RatingCount {
@@ -85,6 +95,8 @@ export interface ResultPlace {
   ratings: Partial<Record<RatingAspect, RatingCount>>;
   timeEvidence: TimeEvidenceSummary[];
   evidence: EvidenceLink[];
+  pendingEnrichment?: boolean; // 평가 보강 중(미리보기 근거만 있음)
+  revision?: number; // 근거·평가가 바뀔 때마다 증가
 }
 
 export interface UnconfirmedPlace {
@@ -107,6 +119,7 @@ export interface GetJobResponse {
   progress: Progress;
   videos: VideoProgress[];
   result: JobResult | null;
+  resultStage?: ResultStage;
 }
 
 export interface ApiErrorBody {
