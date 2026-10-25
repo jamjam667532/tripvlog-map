@@ -53,7 +53,7 @@ class Progress(CamelModel):
 
 
 class VideoProgress(CamelModel):
-    """진행 화면의 영상별 상태. YouTube 제목·썸네일은 넣지 않는다."""
+    """진행 화면의 영상별 상태. 제목·채널명은 결정 0008-2-3으로 추가 예정."""
 
     video_id: VideoId
     state: VideoState
