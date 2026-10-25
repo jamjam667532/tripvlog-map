@@ -50,8 +50,8 @@
 | **[0]** 요청 | `api_public` ([handler](../backend/functions/api_public/handler.py)) | 목적지·스타일·동행 | jobId, guestAccessToken | Step Functions 시작 | Jobs | `clients/orchestrator` |
 | **[1]** 영상 고르기 | `collect` ([handler](../backend/functions/collect/handler.py)) | jobId | 영상 5개 목록 | **YouTube** (검색 3회 = 300 units) | YoutubeCache(25일), Jobs | `clients/youtube`, `rules/selection`, `rules/style_tags` |
 | **[2-1]** 선점 | `claim` ([handler](../backend/functions/claim/handler.py)) | 영상 1개 | ANALYZE / REUSE / WAIT | — | VideoAnalysis | `repos/video_analysis` |
-| **[2-2]** 관찰 | `observe` ([handler](../backend/functions/observe/handler.py)) | 영상 1개 | 단서 목록의 S3 키 | **Gemini** (영상당 1회) | S3 `observation.json` | `clients/gemini`, `prompts/observe.md` |
-| **[2-3]** 해석 | `interpret` ([handler](../backend/functions/interpret/handler.py)) | 단서 S3 키 | 장소 후보 S3 키 | **Bedrock** (영상당 1회, 형식 오류면 +1) | S3 `interpretation.json` | `clients/bedrock`, `prompts/interpret.md` |
+| **[2-2]** 관찰 | `observe` ([handler](../backend/functions/observe/handler.py)) | 영상 1개 | 단서 목록의 S3 키 | **Gemini** (`GEMINI_MODELS`가 있으면 3분 구간마다 1회 + 얇은 구간 다시 1회, 없으면 영상당 1회) | S3 `observation.json` | `clients/gemini`, `prompts/observe.md` |
+| **[2-3]** 해석 | `interpret` ([handler](../backend/functions/interpret/handler.py)) | 단서 S3 키 | 장소 후보 S3 키 | **Bedrock** (단서 80개마다 1회, 형식 오류면 +1. 게이트웨이 출력 4,096토큰 한도) | S3 `interpretation.json` | `clients/bedrock`, `prompts/interpret.md` |
 | **[2-4]** 지점 매칭 | `match` ([handler](../backend/functions/match/handler.py)) | 후보 S3 키 | 확정 장소 수 | **Places** (후보당 1회) | Places(근거), CoordCache(좌표 25일), S3 `match.json` | `clients/places`, `rules/matching`, `rules/evidence` |
 | **[2-x]** 실패 기록 | `claim` action=fail | Step Functions 오류 이름 | FAILED | — | Jobs, VideoAnalysis | — |
 | **[3]** 예비 영상 대체 | `aggregate` action=replace ([handler](../backend/functions/aggregate/handler.py)) | jobId | 대체 영상 또는 없음 | — | Jobs | `rules/replacement` |
@@ -88,9 +88,17 @@
 
 ## 걸리는 시간 (10/25 실측)
 
-- Gemini [2-2]가 대부분이다. 3.8-flash LOW 전체 영상 14~28분짜리에 **86~189초**. Bedrock·Places는 수 초.
-- 지금 설정(`Map MaxConcurrency=1`, observe 예약 동시성 1)은 영상을 **하나씩 차례로** 분석해서 5개면 약 **10~12분**.
-- 무료 한도: 영상 1개 입력이 약 8만~16만 토큰이라, 동시에 2개를 넘기면 분당 25만 토큰 한도(429)에 걸린다. 동시 실행 수는 결정 0008(작성 예정)에서 정한다.
+**[2-2] 관찰 방식(2026-10-25 저녁부터, `SegmentedObserver`):** 영상을 약 3분 구간으로 잘라 3.5-flash-lite·3.1-flash-lite에 동시에 보낸다(LOW·2초에 한 장면·프롬프트 v2·재생 위치 "MM:SS"). 모델마다 분당 14회까지만 보내고 넘치는 구간은 다음 1분으로 미룬다. 실패·얇은 구간은 3.5-flash-lite로 한 번 더 보내 합친다. 근거: `experiments/results/gemini-observe-history.md`.
+
+| 측정 | 시간 |
+| --- | --- |
+| 실험 스크립트, 영상 1개(구간 동시) | Gemini 15~35초 |
+| 실험 스크립트, 영상 5개(두 모델) | 마지막 영상까지 35~48초 |
+| **로컬 서버 실제 요청 1건(오사카, 영상 5개, 22:03)** | **첫 장소 91초, 전체 223초**, 5개 모두 성공, 장소 18곳 |
+
+- 실제 요청이 실험보다 느린 이유: 구간 요청이 약 32회 + 다시 보내기라 두 모델 합계 분당 28회를 넘어 일부가 1분씩 기다린다. 해석은 영상당 7~37초, 매칭 1~27초.
+- 이전 방식(3.8-flash 통째로, 하나씩)은 영상 5개 약 12분.
+- 이미 분석한 영상은 다음 요청부터 바로 쓴다(같은 `ANALYSIS_VERSION`).
 
 ## 쓰지 않는 것 (2026-10-25 정리)
 
