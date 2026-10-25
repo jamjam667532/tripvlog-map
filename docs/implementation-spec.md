@@ -28,7 +28,6 @@
 | --- | --- |
 | 1단계 (첫 검증) | 비로그인 경로만. 목적지·스타일·동행 입력, 영상 5개 순차 분석, 지도 출력, 규칙 vs Bedrock 비교 실험 |
 | 2단계 | Cognito Google 로그인, `/me/preferences`, 유튜브 1회 연결, 개인 순위 재계산 |
-| 조건부 | Gemini 불허 시 업로드 모드(Nova Lite + Transcribe). 지시가 있을 때만 구현 |
 
 ---
 
@@ -64,7 +63,6 @@ EventBridge Scheduler (매일) → Lambda cleanup (만료 캐시·연결 데이�
 REGION = "us-east-1"                      # TODO(verify): 학교 계정에서 허용된 US 리전
 BEDROCK_INTERPRETER_MODEL_ID = "..."      # TODO(verify): Claude Haiku 4.5 모델 ID 또는 추론 프로파일(us. 접두사)
 BEDROCK_COMPARE_MODEL_ID = "..."          # TODO(verify): GPT 5.6 Luna 모델 ID
-BEDROCK_STYLE_MODEL_ID = "..."            # TODO(verify): Amazon Nova Micro 모델 ID
 GEMINI_MODEL = "..."                      # TODO(verify): 무료 티어에서 YouTube URL 입력을 지원하는 Flash 계열
 ANALYSIS_VERSION = "v1-haiku45"           # 모델·프롬프트·스키마가 바뀌면 올린다
 MAX_VIDEOS_PER_JOB = 5
@@ -234,7 +232,7 @@ Bedrock 호출은 `bedrock-runtime`의 Converse API로 통일하고 모델 ID만
 2. YoutubeCache(SEARCH) 유효하면 재사용, 아니면 `search.list` 호출 후 저장. 일일 검색 횟수 카운터를 두고 상한 초과 시 캐시만 사용.
 3. `videos.list`로 메타데이터(길이, 공개 여부, 채널) 조회 → YoutubeCache(VIDEO) 저장.
 4. 규칙 필터: 같은 영상 제거, 공개만, 길이 ≥ 3분, 최근 2년, 채널당 1개, 재업로드 의심은 표시만(제외하지 않음). 장소 겹침으로 거르지 않는다.
-5. 스타일 태그(Nova Micro, 제목+설명란): 사용자 선호 스타일 영상을 우선하되 채널 수 확보가 우선. 정책 확인 전에는 `STYLE_TAGGING_ENABLED=false`로 두고 규칙 키워드 태깅만 사용.
+5. 스타일 태그(제목+설명란 키워드 규칙, `rules/style_tags.py`): 사용자 선호 스타일 영상을 우선하되 채널 수 확보가 우선.
 6. 최대 5개 선택, Jobs.videoRefs 기록. 남은 후보 중 다른 채널 영상을 예비로 최대 `SPARE_VIDEOS_PER_JOB`개 Jobs.spareVideos에 기록(결정 0002-5).
 
 ### 5.2 observe (Gemini)
