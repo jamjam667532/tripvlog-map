@@ -27,28 +27,39 @@ def main() -> None:
     p.add_argument("--segments", type=int, default=4)
     p.add_argument("--fps", type=float, default=0.5)
     p.add_argument("--thinking", default="default")
+    p.add_argument("--fallback", help="실패한 구간을 이 모델로 1회 다시 보낸다")
     a = p.parse_args()
 
     step = -(-a.duration // a.segments)  # 올림
     bounds = [(i * step, min((i + 1) * step, a.duration)) for i in range(a.segments)]
-    t0 = time.time()
-    procs = []
-    for i, (s, e) in enumerate(bounds):
-        cmd = [sys.executable, str(HERE / "probe.py"), "--tag", f"{a.tag}-{i + 1}"]
-        cmd += ["--model", a.model, "--video", a.video, "--duration", str(a.duration)]
+
+    def start(tag: str, model: str, s: int, e: int) -> subprocess.Popen[str]:
+        cmd = [sys.executable, str(HERE / "probe.py"), "--tag", tag]
+        cmd += ["--model", model, "--video", a.video, "--duration", str(a.duration)]
         cmd += ["--res", "LOW", "--fps", str(a.fps), "--thinking", a.thinking]
         cmd += ["--clip", str(s), str(e)]
-        procs.append((i, time.time(), subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)))
+        return subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+
+    def last_call(tag: str) -> dict:
+        calls = [json.loads(line) for line in (OUT / "calls.jsonl").read_text().splitlines()]
+        return next((r for r in reversed(calls) if r.get("tag") == tag), {})
+
+    t0 = time.time()
+    procs = [start(f"{a.tag}-{i + 1}", a.model, s, e) for i, (s, e) in enumerate(bounds)]
     ends: dict[int, float] = {}
-    for i, _, proc in procs:
+    tags = {i: f"{a.tag}-{i + 1}" for i in range(len(bounds))}
+    for i, proc in enumerate(procs):
         proc.communicate()
         ends[i] = time.time() - t0
+        if a.fallback and "input" not in last_call(tags[i]):
+            tags[i] = f"{a.tag}-{i + 1}r"  # 다른 모델로 1회
+            start(tags[i], a.fallback, *bounds[i]).communicate()
+            ends[i] = time.time() - t0
 
     clues, rows = [], []
-    calls = [json.loads(line) for line in (OUT / "calls.jsonl").read_text().splitlines()]
     for i, (s, e) in enumerate(bounds):
-        tag = f"{a.tag}-{i + 1}"
-        rec = next((r for r in reversed(calls) if r.get("tag") == tag), {})
+        tag = tags[i]
+        rec = last_call(tag)
         obs = OUT / f"obs_{tag}.json"
         part = json.loads(obs.read_text())["clues"] if obs.exists() and "input" in rec else []
         clues += part
