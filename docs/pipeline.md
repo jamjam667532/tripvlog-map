@@ -27,6 +27,22 @@
 [M8]  api_jobs, api_me ── 로그인 사용자 경로                    ※ 아직 미구현(빈 틀)
 ```
 
+## 2단계(M8): 로그인 + 유튜브 1회 연결 (아직 미구현)
+
+```
+[M8] 로그인 (Google ID 토큰 JWT, 결정 0007-2)
+  └ "유튜브 연결" → 브라우저가 짧은 수명 액세스 토큰(youtube.readonly) 받음
+      → POST /me/youtube/import : 구독 채널·좋아요 영상을 1회 조회 → 여행 채널·영상 후보 반환 (토큰 저장·로그 금지, 확정 결정 3)
+      → POST /me/youtube/confirm: 사용자가 고른 참고 채널·스타일만 Users.preferences에 저장
+      → [4] 순위에서 참고 채널이 방문한 장소에 가중치 (rules/ranking.py REFERENCE_WEIGHT, 구현됨)
+      → POST /jobs/{id}/rerank   : 모델 호출 없이 규칙으로 순위만 다시
+  └ DELETE /me/youtube/connection: 유튜브 유래 데이터만 삭제
+```
+
+- 좋아요 수·조회수·구독자 수는 점수에 쓰지 않는다. "이 사용자가 어느 채널을 보는지"만 쓴다.
+- `youtube.readonly`는 Google 앱 검증 대상이라, 검증 전에는 등록한 테스트 계정(최대 100개)만 쓸 수 있다.
+- 상세: `implementation-spec.md` §3.3, §4.4.
+
 ## 단계별 표
 
 | 단계 | Lambda (코드) | 입력 | 출력 | 외부 호출 | 저장 | 쓰는 규칙·클라이언트 |
