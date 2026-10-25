@@ -51,9 +51,11 @@ def main() -> None:
             return []
         return json.loads(obs.read_text())["clues"]
 
-    def thin(tag: str, s: int, e: int) -> bool:
-        """실패했거나, 구간 1분당 단서가 --min-per-min개 미만이면 얇다."""
-        return len(result(tag)) < a.min_per_min * (e - s) / 60
+    def thin(tag: str, s: int, e: int, median_out: float) -> bool:
+        """실패, 1분당 단서 부족, 또는 출력이 다른 구간 중앙값의 1/4 미만이면 얇다."""
+        out = last_call(tag).get("output") or 0
+        few = len(result(tag)) < a.min_per_min * (e - s) / 60
+        return few or out < median_out / 4
 
     # 1차: 모든 구간을 동시에
     t0 = time.time()
@@ -63,7 +65,9 @@ def main() -> None:
     ends = {i: time.time() - t0 for i in tags}
 
     # 2차: 실패·얇은 구간만 다른 모델로 동시에 한 번 더, 결과는 합친다
-    redo = [i for i, b in enumerate(bounds) if a.fallback and thin(tags[i][0], *b)]
+    outs = [last_call(tags[i][0]).get("output") or 0 for i in tags]
+    median_out = sorted(outs)[len(outs) // 2]
+    redo = [i for i, b in enumerate(bounds) if a.fallback and thin(tags[i][0], *b, median_out)]
     for i in redo:
         tags[i].append(f"{a.tag}-{i + 1}r")
     for proc in [start(tags[i][1], a.fallback, *bounds[i]) for i in redo]:
