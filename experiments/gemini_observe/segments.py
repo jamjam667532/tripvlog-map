@@ -27,7 +27,8 @@ def main() -> None:
     p.add_argument("--segments", type=int, default=4)
     p.add_argument("--fps", type=float, default=0.5)
     p.add_argument("--thinking", default="default")
-    p.add_argument("--fallback", help="실패한 구간을 이 모델로 1회 다시 보낸다")
+    p.add_argument("--fallback", help="실패하거나 얇은 구간을 이 모델로 1회 더 보내 합친다")
+    p.add_argument("--min-per-min", type=float, default=2.0, help="얇은 구간 기준: 1분당 단서 수")
     a = p.parse_args()
 
     step = -(-a.duration // a.segments)  # 올림
@@ -44,36 +45,56 @@ def main() -> None:
         calls = [json.loads(line) for line in (OUT / "calls.jsonl").read_text().splitlines()]
         return next((r for r in reversed(calls) if r.get("tag") == tag), {})
 
-    t0 = time.time()
-    procs = [start(f"{a.tag}-{i + 1}", a.model, s, e) for i, (s, e) in enumerate(bounds)]
-    ends: dict[int, float] = {}
-    tags = {i: f"{a.tag}-{i + 1}" for i in range(len(bounds))}
-    for i, proc in enumerate(procs):
-        proc.communicate()
-        ends[i] = time.time() - t0
-        if a.fallback and "input" not in last_call(tags[i]):
-            tags[i] = f"{a.tag}-{i + 1}r"  # 다른 모델로 1회
-            start(tags[i], a.fallback, *bounds[i]).communicate()
-            ends[i] = time.time() - t0
-
-    clues, rows = [], []
-    for i, (s, e) in enumerate(bounds):
-        tag = tags[i]
-        rec = last_call(tag)
+    def result(tag: str) -> list[dict]:
         obs = OUT / f"obs_{tag}.json"
-        part = json.loads(obs.read_text())["clues"] if obs.exists() and "input" in rec else []
+        if not obs.exists() or "input" not in last_call(tag):
+            return []
+        return json.loads(obs.read_text())["clues"]
+
+    def thin(tag: str, s: int, e: int) -> bool:
+        """실패했거나, 구간 1분당 단서가 --min-per-min개 미만이면 얇다."""
+        return len(result(tag)) < a.min_per_min * (e - s) / 60
+
+    # 1차: 모든 구간을 동시에
+    t0 = time.time()
+    tags = {i: [f"{a.tag}-{i + 1}"] for i in range(len(bounds))}
+    for proc in [start(tags[i][0], a.model, *b) for i, b in enumerate(bounds)]:
+        proc.communicate()
+    ends = {i: time.time() - t0 for i in tags}
+
+    # 2차: 실패·얇은 구간만 다른 모델로 동시에 한 번 더, 결과는 합친다
+    redo = [i for i, b in enumerate(bounds) if a.fallback and thin(tags[i][0], *b)]
+    for i in redo:
+        tags[i].append(f"{a.tag}-{i + 1}r")
+    for proc in [start(tags[i][1], a.fallback, *bounds[i]) for i in redo]:
+        proc.communicate()
+    for i in redo:
+        ends[i] = time.time() - t0
+
+    clues, rows, seen = [], [], set()
+    for i, (s, e) in enumerate(bounds):
+        part = []
+        for tag in tags[i]:
+            rec = last_call(tag)
+            got = result(tag)
+            for c in got:  # 같은 시각(5초 단위)·같은 글자는 한 번만
+                text = (c.get("seen_text") or c.get("utterance") or c.get("scene") or "")[:20]
+                key = (c["start_sec"] // 5, c["clue_type"], text)
+                if key not in seen:
+                    seen.add(key)
+                    part.append(c)
+            rows.append(
+                f"  {tag} {s // 60:02d}:{s % 60:02d}-{e // 60:02d}:{e % 60:02d} "
+                f"{rec.get('model', '')[7:]} {rec.get('sec', '-')}초 단서 {len(got)} "
+                f"{rec.get('error', '')[:40]}"
+            )
         clues += part
-        rows.append(
-            f"  {tag} {s // 60:02d}:{s % 60:02d}-{e // 60:02d}:{e % 60:02d} "
-            f"{rec.get('sec', '-')}초 단서 {len(part)} 출력 {rec.get('output', '-')} "
-            f"{rec.get('error', '')[:60]}"
-        )
     clues.sort(key=lambda c: c["start_sec"])
     (OUT / f"obs_{a.tag}.json").write_text(
         json.dumps({"video_id": a.video, "clues": clues}, ensure_ascii=False, indent=1)
     )
     slowest = max(ends.values())
-    print(f"== {a.tag} {a.model} {a.segments}구간 동시: 가장 늦은 구간 {slowest:.0f}초")
+    print(f"== {a.tag} {a.model} {a.segments}구간, 재요청 {len(redo)}: 끝 {slowest:.0f}초")
     print(f"   단서 {len(clues)}")
     print("\n".join(rows))
 
