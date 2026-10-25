@@ -12,8 +12,8 @@ VALID = {
     "video_id": "WRONG_ID_FROM_MODEL",
     "clues": [
         {
-            "start_sec": 750,
-            "end_sec": 905,
+            "start": "12:30",
+            "end": "15:05",
             "clue_type": "SPEECH",
             "heard_name": "이치란",
             "seen_text": None,
@@ -55,6 +55,7 @@ def test_passes_public_youtube_url_and_json_schema() -> None:
     assert cfg.response_json_schema["type"] == "object"
     assert "관찰자" in cfg.system_instruction
     assert obs.result.video_id == "dQw4w9WgXcQ"  # 모델이 쓴 값이 아니라 요청 값
+    assert (obs.result.clues[0].start_sec, obs.result.clues[0].end_sec) == (750, 905)  # MM:SS → 초
     assert obs.tokens == 500
 
 

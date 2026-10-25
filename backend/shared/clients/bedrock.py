@@ -67,7 +67,7 @@ class BedrockConverseInterpreter:
         client: Any = None,
         region: str | None = None,
         structured_output: bool = True,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,  # 구간 관찰로 단서가 200~300개라 4096이면 출력이 잘린다
     ) -> None:
         self._client = client or boto3.client("bedrock-runtime", region_name=region)
         self._model_id = model_id

@@ -12,7 +12,12 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from shared.clients.gemini import GeminiObserver, GeminiYouTubeObserver
+from shared.clients.gemini import (
+    GeminiObserver,
+    GeminiYouTubeObserver,
+    RateLimiter,
+    SegmentedObserver,
+)
 from shared.clients.secrets import get_secret
 from shared.repos import Repos, analysis_key, with_metrics
 from shared.schemas.events import ObserveOutput, VideoTask
@@ -48,17 +53,42 @@ def run(event: VideoTask, deps: Deps) -> ObserveOutput:
     return ObserveOutput(**event.task_fields(), observation_s3_key=key)
 
 
+def video_duration(repos: Repos, clock: Callable[[], datetime]) -> Callable[[str], int | None]:
+    """collect가 YoutubeCache에 남긴 영상 길이(초). 구간 관찰기가 구간을 나눌 때 쓴다."""
+
+    def lookup(video_id: str) -> int | None:
+        found = repos.youtube_cache.get_videos([video_id], now=int(clock().timestamp()))
+        meta = found.get(video_id)
+        return meta.duration_sec if meta else None
+
+    return lookup
+
+
+def make_observer(s: Settings, repos: Repos, api_key: str) -> GeminiObserver:
+    """GEMINI_MODELS가 있으면 구간 관찰(결정 0008), 없으면 영상 통째로 1회."""
+    if s.gemini_models:
+        return SegmentedObserver(
+            s.gemini_models,
+            duration_of=video_duration(repos, lambda: datetime.now(UTC)),
+            api_key=api_key,
+            limiter=RateLimiter(s.gemini_rpm),
+            segment_sec=s.gemini_segment_sec,
+            fps=s.gemini_fps,
+            media_resolution=s.gemini_media_resolution,
+        )
+    return GeminiYouTubeObserver(
+        require(s.gemini_model, "GEMINI_MODEL"),
+        api_key=api_key,
+        media_resolution=s.gemini_media_resolution,
+    )
+
+
 @lru_cache(maxsize=1)
 def _deps() -> Deps:
     s = Settings.from_env()
+    repos = Repos.from_settings(s)
     return Deps(
-        settings=s,
-        repos=Repos.from_settings(s),
-        gemini=GeminiYouTubeObserver(
-            require(s.gemini_model, "GEMINI_MODEL"),
-            api_key=get_secret(s.gemini_key_param),
-            media_resolution=s.gemini_media_resolution,
-        ),
+        settings=s, repos=repos, gemini=make_observer(s, repos, get_secret(s.gemini_key_param))
     )
 
 

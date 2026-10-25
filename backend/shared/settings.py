@@ -45,6 +45,12 @@ class Settings:
     bedrock_structured_output: bool = True
     gemini_model: str | None = None
     gemini_media_resolution: str = "MEDIA_RESOLUTION_LOW"
+    # 구간 관찰(결정 0008): GEMINI_MODELS(쉼표로 나눈 선호 순)가 있으면 구간 관찰기를 쓴다.
+    # 모델 값은 사람이 정한다.
+    gemini_models: tuple[str, ...] = ()
+    gemini_segment_sec: int = 190
+    gemini_fps: float = 0.5
+    gemini_rpm: int = 14  # 모델별 분당 요청 상한(무료 15에서 1 여유)
     # SSM Parameter Store 이름 (값이 아니라 이름)
     gemini_key_param: str = "/tripvlog/gemini-api-key"
     youtube_key_param: str = "/tripvlog/youtube-api-key"
@@ -80,6 +86,12 @@ class Settings:
             bedrock_structured_output=e.get("BEDROCK_STRUCTURED_OUTPUT", "true").lower() == "true",
             gemini_model=_opt(e, "GEMINI_MODEL"),
             gemini_media_resolution=e.get("GEMINI_MEDIA_RESOLUTION", d.gemini_media_resolution),
+            gemini_models=tuple(
+                m.strip() for m in e.get("GEMINI_MODELS", "").split(",") if m.strip()
+            ),
+            gemini_segment_sec=_int(e, "GEMINI_SEGMENT_SEC", d.gemini_segment_sec),
+            gemini_fps=float(e.get("GEMINI_FPS") or d.gemini_fps),
+            gemini_rpm=_int(e, "GEMINI_RPM", d.gemini_rpm),
             gemini_key_param=e.get("GEMINI_KEY_PARAM", d.gemini_key_param),
             youtube_key_param=e.get("YOUTUBE_KEY_PARAM", d.youtube_key_param),
             places_key_param=e.get("PLACES_KEY_PARAM", d.places_key_param),

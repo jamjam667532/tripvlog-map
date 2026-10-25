@@ -36,9 +36,16 @@ from functions.collect import handler as collect_fn
 from functions.interpret import handler as interpret_fn
 from functions.match import handler as match_fn
 from functions.observe import handler as observe_fn
+from functions.observe.handler import video_duration
 from shared.clients.bedrock import BedrockInterpreter, GatewayChatInterpreter
 from shared.clients.errors import ExternalApiError
-from shared.clients.gemini import GeminiObserver, GeminiYouTubeObserver, Observation
+from shared.clients.gemini import (
+    GeminiObserver,
+    GeminiYouTubeObserver,
+    Observation,
+    RateLimiter,
+    SegmentedObserver,
+)
 from shared.clients.places import PlacesClient, PlacesTextSearch
 from shared.clients.youtube import YouTubeClient, YouTubeDataApi
 from shared.repos import Repos
@@ -267,9 +274,19 @@ def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--env-file", type=Path, default=Path("../experiments/.env"))
     p.add_argument("--port", type=int, default=8787)
-    p.add_argument("--gemini-model", default="gemini-3-flash-preview")
-    p.add_argument("--thinking", default="low", help="minimal | low | medium | high | none")
-    p.add_argument("--clip-sec", type=int, default=300, help="0이면 전체 영상")
+    p.add_argument(
+        "--gemini-models",
+        default="gemini-3.5-flash-lite,gemini-3.1-flash-lite",
+        help="구간 관찰 모델(선호 순, 쉼표). 비우면 --gemini-model로 영상 통째로 1회",
+    )
+    p.add_argument("--segment-sec", type=int, default=190, help="구간 길이(초)")
+    p.add_argument("--fps", type=float, default=0.5)
+    p.add_argument("--rpm", type=int, default=14, help="모델별 분당 요청 상한")
+    p.add_argument("--gemini-model", default="gemini-3-flash-preview", help="통째로 1회 모드")
+    p.add_argument(
+        "--thinking", default="low", help="통째로 1회 모드: minimal|low|medium|high|none"
+    )
+    p.add_argument("--clip-sec", type=int, default=300, help="통째로 1회 모드: 0이면 전체 영상")
     p.add_argument("--llm-model", default="bedrock-haiku")
     p.add_argument("--concurrency", type=int, default=5, help="동시에 처리할 영상 수")
     p.add_argument("--gemini-concurrency", type=int, default=2, help="Gemini 동시 호출 수")
@@ -285,41 +302,64 @@ def main() -> None:
     os.environ.update(
         AWS_ACCESS_KEY_ID="local", AWS_SECRET_ACCESS_KEY="local", AWS_DEFAULT_REGION=REGION
     )
-    settings = Settings(
-        analysis_version=f"local-{a.gemini_model}-{a.thinking}-{a.clip_sec}",
-        gemini_model=a.gemini_model,
-        bedrock_interpreter_model_id=a.llm_model,
+    models = tuple(m.strip() for m in a.gemini_models.split(",") if m.strip())
+    mode = (
+        f"seg{a.segment_sec}-fps{a.fps}-{'+'.join(models)}"
+        if models
+        else f"{a.gemini_model}-{a.thinking}-{a.clip_sec}"
     )
-    clients = Clients(
-        youtube=YouTubeDataApi(env["YOUTUBE_API_KEY"]),
-        gemini=ThrottledObserver(
-            GeminiYouTubeObserver(
-                a.gemini_model,
-                api_key=env["GEMINI_API_KEY"],
-                media_resolution=settings.gemini_media_resolution,
-                thinking_level=None if a.thinking == "none" else a.thinking,
-                clip_sec=a.clip_sec or None,
-            ),
-            a.gemini_concurrency,
-        ),
-        places=PlacesTextSearch(env["PLACES_API_KEY"]),
-        llm=GatewayChatInterpreter(
-            a.llm_model, api_key=env["LLM_API_KEY"], base_url=env["LLM_BASE_URL"]
-        ),
+    settings = Settings(
+        analysis_version=f"local-v2-{mode}",  # 프롬프트 v2·MM:SS (결정 0006)
+        gemini_model=a.gemini_model,
+        gemini_models=models,
+        gemini_segment_sec=a.segment_sec,
+        gemini_fps=a.fps,
+        gemini_rpm=a.rpm,
+        bedrock_interpreter_model_id=a.llm_model,
     )
 
     with mock_aws():
         create_tables(boto3.client("dynamodb", region_name=REGION), settings)
         boto3.client("s3", region_name=REGION).create_bucket(Bucket=settings.bucket)
+        repos = Repos.from_settings(settings)
+        gemini: GeminiObserver
+        if models:
+            # 구간 관찰기가 모델별 분당 상한으로 줄을 세우고, 실패·얇은 구간은 직접 다시 보낸다
+            gemini = SegmentedObserver(
+                models,
+                duration_of=video_duration(repos, lambda: datetime.now(UTC)),
+                api_key=env["GEMINI_API_KEY"],
+                limiter=RateLimiter(a.rpm),
+                segment_sec=a.segment_sec,
+                fps=a.fps,
+                media_resolution=settings.gemini_media_resolution,
+            )
+        else:
+            gemini = ThrottledObserver(
+                GeminiYouTubeObserver(
+                    a.gemini_model,
+                    api_key=env["GEMINI_API_KEY"],
+                    media_resolution=settings.gemini_media_resolution,
+                    thinking_level=None if a.thinking == "none" else a.thinking,
+                    clip_sec=a.clip_sec or None,
+                ),
+                a.gemini_concurrency,
+            )
+        clients = Clients(
+            youtube=YouTubeDataApi(env["YOUTUBE_API_KEY"]),
+            gemini=gemini,
+            places=PlacesTextSearch(env["PLACES_API_KEY"]),
+            llm=GatewayChatInterpreter(
+                a.llm_model, api_key=env["LLM_API_KEY"], base_url=env["LLM_BASE_URL"]
+            ),
+        )
         pipeline = LocalPipeline(settings, clients, a.concurrency)
-        deps = api_fn.Deps(settings, Repos.from_settings(settings), ThreadStarter(pipeline.run))
+        deps = api_fn.Deps(settings, repos, ThreadStarter(pipeline.run))
         server = ThreadingHTTPServer(("127.0.0.1", a.port), make_handler(deps))
         logger.info(
-            "listening on http://127.0.0.1:%d (gemini=%s thinking=%s clip=%ss llm=%s)",
+            "listening on http://127.0.0.1:%d (gemini=%s llm=%s)",
             a.port,
-            a.gemini_model,
-            a.thinking,
-            a.clip_sec,
+            mode,
             a.llm_model,
         )
         with contextlib.suppress(KeyboardInterrupt):

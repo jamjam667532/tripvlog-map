@@ -92,3 +92,40 @@ def test_style_tags() -> None:
     assert style_tag("교토 카페 투어와 신사 산책") == "복합"
     assert style_tag("일상 브이로그") == "분류불가"
     assert video_styles("돈키호테 쇼핑 하울", "") == {"쇼핑"}
+
+
+def test_longer_than_30_minutes_excluded() -> None:
+    picked = select_videos(
+        [meta("long", "c1", minutes=31), meta("edge", "c2", minutes=30)],
+        now=NOW,
+        max_videos=5,
+        max_spares=3,
+    )
+    assert ids(picked.chosen) == ["edge"]
+
+
+def test_destination_must_appear_in_title_or_description() -> None:
+    picked = select_videos(
+        [
+            meta("ko", "c1", title="오사카 3박4일 브이로그"),
+            meta("ja", "c2", title="大阪 食べ歩き vlog"),
+            meta("en", "c3", title="OSAKA trip"),
+            meta("other", "c4", title="여행 후 다이어트 일상 복귀 ep26"),
+        ],
+        now=NOW,
+        destination="오사카",
+        max_videos=5,
+        max_spares=3,
+    )
+    assert ids(picked.chosen) == ["ko", "ja", "en"]
+
+
+def test_unknown_destination_matches_its_own_name() -> None:
+    picked = select_videos(
+        [meta("a", "c1", title="방콕 먹방"), meta("b", "c2", title="오사카 먹방")],
+        now=NOW,
+        destination="방콕",
+        max_videos=5,
+        max_spares=3,
+    )
+    assert ids(picked.chosen) == ["a"]

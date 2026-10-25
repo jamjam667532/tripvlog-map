@@ -118,6 +118,7 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
         (metas[v] for v in ids if v in metas),
         now=now_dt,
         preferred_styles=job.request.styles,
+        destination=dest,
         max_videos=s.max_videos_per_job,
         max_spares=s.spare_videos_per_job,
     )

@@ -31,7 +31,7 @@ METAS = [
     meta("v4", "c1"),  # 같은 채널 → 제외
     meta("v5", "c5"),
     meta("v6", "c6"),
-    meta("v7", "c7", minutes=40),
+    meta("v7", "c7", minutes=25),  # 30분 상한 안(결정 0006-5)
     meta("v8", "c8", minutes=8),
     meta("v9", "c9"),
 ]
