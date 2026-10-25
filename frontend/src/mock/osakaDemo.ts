@@ -1,0 +1,275 @@
+// 시연용 결과. 실제 Gemini 관찰(experiments/gemini_observe/out, 오사카 영상 5개·채널 5개)에서
+// 재생 위치와 원문을 그대로 옮기고 집계는 손으로 정리했다. 파이프라인 출력이 아니다.
+// placeId는 가짜, 좌표는 근사값이다.
+import type { JobResult } from "../types";
+
+const CH = {
+  a: "ch-demo-a", // ec6YBcndc4w
+  b: "UCL6vs5Dssw4b4frI6cfTt9A", // drcqsb-G7yI
+  c: "UCC9XEedRtiWNIVrSI-JayZw", // vghwtv344yI
+  d: "UC4YKq-9KMKhhX0yRSrvAUVA", // cxC8L8ua3z4
+  e: "UCgfI3loFgEUQ1jpwxTv3fTg", // j310ARBk0G4
+} as const;
+
+export const DEMO_VIDEO_IDS = [
+  "ec6YBcndc4w",
+  "drcqsb-G7yI",
+  "vghwtv344yI",
+  "cxC8L8ua3z4",
+  "j310ARBk0G4",
+] as const;
+
+const DENOMINATOR = 5;
+const ch = (visited: number) => ({ visited, denominator: DENOMINATOR });
+const r = (positive = 0, negative = 0, mixed = 0) => ({ positive, negative, mixed });
+
+export function osakaDemoResult(jobId: string): JobResult {
+  return {
+    jobId,
+    destination: "오사카",
+    analyzedChannels: DENOMINATOR,
+    failedVideos: 0,
+    places: [
+      {
+        placeId: "demo-glico",
+        name: "글리코 사인 · 도톤보리",
+        category: "ATTRACTION",
+        lat: 34.6687,
+        lng: 135.5013,
+        areaGroup: "도톤보리·난바",
+        rank: 1,
+        matchStatus: "CONFIRMED",
+        channels: ch(4),
+        ratings: {},
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.a, videoId: "ec6YBcndc4w", startSec: 177, text: "도톤보리 글리코상 앞에서 셀프 카메라를 찍는 장면" },
+          { channelId: CH.b, videoId: "drcqsb-G7yI", startSec: 713, text: "사람 없는 틈을 타 글리코상이랑 사진 찍기" },
+          { channelId: CH.d, videoId: "cxC8L8ua3z4", startSec: 19, text: "Glico" },
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 150, text: "글리코상을 잠시 만납니다." },
+        ],
+      },
+      {
+        placeId: "demo-kaminari-sushi",
+        name: "카미나리 스시 (雷寿司) · 도톤보리",
+        category: "RESTAURANT",
+        lat: 34.6693,
+        lng: 135.5036,
+        areaGroup: "도톤보리·난바",
+        rank: 2,
+        matchStatus: "CONFIRMED",
+        channels: ch(2),
+        ratings: { taste: r(1, 0, 1), service: r(1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.a, videoId: "ec6YBcndc4w", startSec: 150, text: "참치 기름기 차원이 달라 .." },
+          { channelId: CH.a, videoId: "ec6YBcndc4w", startSec: 166, text: "나 올해 먹은 스시 원탑 드린다" },
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 302, text: "근데 추천하기는 애매한 집인 것 같아요. 맛이 없진 않았는데, 가게가 되게 좁구.. 직원 분들도 친절한데, 뭔가 여러모로 애매" },
+        ],
+      },
+      {
+        placeId: "demo-gettotanimachi",
+        name: "겟토타니마치 · 타니마치",
+        category: "RESTAURANT",
+        lat: 34.6829,
+        lng: 135.5164,
+        areaGroup: "타니마치",
+        rank: 3,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1), wait: r(0, 1) },
+        timeEvidence: [{ kind: "CREATOR_TIP", situation: "OPENING", channels: 1, recommend: true }],
+        evidence: [
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 796, text: "이거 먹으려고 옴 시그니처 메뉴인 계란 덮밥" },
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 858, text: "저희 1시간 기다렸거든요 1시간 웨이팅은 오바고 아예 오픈런 해서 먹는 게 나을 듯" },
+        ],
+      },
+      {
+        placeId: "demo-kameo-ramen",
+        name: "큐슈라멘 카메오 · 도톤보리",
+        category: "RESTAURANT",
+        lat: 34.6689,
+        lng: 135.5006,
+        areaGroup: "도톤보리·난바",
+        rank: 4,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1), wait: r(1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 178, text: "토마토 라멘이 도대체 뭔지 궁금해서 제일 먼저 갔는데 독특하지만 꽤 맛있었던 것 같아요." },
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 188, text: "전 운이 좋아 웨이팅 안했는데, 먹고 나오니 웨이팅이 길었어용." },
+        ],
+      },
+      {
+        placeId: "demo-yakiniku-maru",
+        name: "야키니쿠 마루 · 신사이바시",
+        category: "RESTAURANT",
+        lat: 34.6716,
+        lng: 135.5059,
+        areaGroup: "신사이바시",
+        rank: 5,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 575, text: "계란국은 무조건 시키세요 무조건!!" },
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 641, text: "와서 '토시살' 무조건 먹고 가기" },
+        ],
+      },
+      {
+        placeId: "demo-sushiro-dotonbori",
+        name: "스시로 · 도톤보리점",
+        category: "RESTAURANT",
+        lat: 34.6686,
+        lng: 135.5047,
+        areaGroup: "도톤보리·난바",
+        rank: 6,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 163, text: "국수 같은 사이드 메뉴들도 전부 맛있었음" },
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 176, text: "체인점 많으니까 일본 오면 꼭 한번 와보세요" },
+        ],
+      },
+      {
+        placeId: "demo-kani-doraku",
+        name: "카니도라쿠 · 도톤보리",
+        category: "RESTAURANT",
+        lat: 34.6688,
+        lng: 135.5021,
+        areaGroup: "도톤보리·난바",
+        rank: 7,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.d, videoId: "cxC8L8ua3z4", startSec: 353, text: "게살 다진 걸 올리고 먹는 게살 오차즈케인데요 어 이거 생각보다 너무 맛있습니다" },
+        ],
+      },
+      {
+        placeId: "demo-mizuno",
+        name: "오코노미야키 미즈노 · 도톤보리",
+        category: "RESTAURANT",
+        lat: 34.6685,
+        lng: 135.5025,
+        areaGroup: "도톤보리·난바",
+        rank: 8,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.d, videoId: "cxC8L8ua3z4", startSec: 664, text: "일단 엄청 부드럽고요 밀가루는 조금 씹는 식감이 있잖아요 이거는 마라 그런가 입에서 살살 녹습니다" },
+        ],
+      },
+      {
+        placeId: "demo-moto-coffee",
+        name: "모토커피 · 기타하마",
+        category: "CAFE",
+        lat: 34.6913,
+        lng: 135.5083,
+        areaGroup: "기타하마",
+        rank: 9,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1), wait: r(0, 1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 223, text: "테라스에 앉으려면 웨이팅을 해야 했어요." },
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 227, text: "괜히 허전해서 치즈케이크 하나 시켰는데 아주 잘한 선택... ㅎㅎ" },
+        ],
+      },
+      {
+        placeId: "demo-and-island",
+        name: "앤드 아일랜드 · 기타하마",
+        category: "CAFE",
+        lat: 34.6921,
+        lng: 135.5067,
+        areaGroup: "기타하마",
+        rank: 10,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 894, text: "뷰 맛집으로 유명한 핫플 카페" },
+          { channelId: CH.c, videoId: "vghwtv344yI", startSec: 905, text: "커피 맛 좋으~" },
+        ],
+      },
+      {
+        placeId: "demo-gorichan",
+        name: "오니기리 고리짱 · 나카자키초",
+        category: "RESTAURANT",
+        lat: 34.7077,
+        lng: 135.5051,
+        areaGroup: "나카자키초",
+        rank: 11,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { taste: r(1), wait: r(0, 0, 1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 437, text: "그래도 요긴 회전이 빨라서 20분? 정도 기다린듯 해요." },
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 459, text: "주먹밥은 후기대로 꽤 맛있었어요. 직원 분들도 친절하고..." },
+        ],
+      },
+      {
+        placeId: "demo-motomura-namba",
+        name: "규카츠 모토무라 · 난바 분점",
+        category: "RESTAURANT",
+        lat: 34.6656,
+        lng: 135.503,
+        areaGroup: "도톤보리·난바",
+        rank: 12,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: { service: r(0, 1) },
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.e, videoId: "j310ARBk0G4", startSec: 1016, text: "맛은 모토무라 규카츠 딱 그 맛 ㅎㅎ 구글 후기는 다 좋던데 저는 좀 운이 나빴는지 첫 응대 직원이 매우 불친절..ㅠ" },
+        ],
+      },
+      {
+        placeId: "demo-yaekatsu",
+        name: "야에카츠 · 신세카이",
+        category: "RESTAURANT",
+        lat: 34.6503,
+        lng: 135.5061,
+        areaGroup: "신세카이",
+        rank: 13,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: {},
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.d, videoId: "cxC8L8ua3z4", startSec: 876, text: "가장 먼저 도테야키라고 이 쿠시카츠 중에서도 이 집의 시그니처인데" },
+        ],
+      },
+      {
+        placeId: "demo-osaka-castle",
+        name: "오사카성",
+        category: "ATTRACTION",
+        lat: 34.6873,
+        lng: 135.5259,
+        areaGroup: "오사카성",
+        rank: 14,
+        matchStatus: "CONFIRMED",
+        channels: ch(1),
+        ratings: {},
+        timeEvidence: [],
+        evidence: [
+          { channelId: CH.d, videoId: "cxC8L8ua3z4", startSec: 992, text: "오사카성 천수각 외관이 올려다보이는 장면" },
+        ],
+      },
+    ],
+    unconfirmed: [
+      { names: ["스시로", "スシロー"], reason: "MULTIPLE_BRANCHES" },
+      { names: ["규카츠 모토무라", "牛かつ もと村"], reason: "MULTIPLE_BRANCHES" },
+    ],
+  };
+}
