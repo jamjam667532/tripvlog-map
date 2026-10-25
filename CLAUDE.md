@@ -9,9 +9,9 @@
 ## 확정된 결정 (되돌리지 말 것)
 
 1. **동선·일정 없음.** 기간 입력, 일자별 일정, 방문 순서, 경로를 만들지 않는다. 대신 영상 근거 기반 "방문 시간대 근거"를 보여준다.
-2. **로그인은 선택.** 비로그인은 `/public/*` 경로, 로그인은 Cognito JWT가 걸린 `/jobs`, `/me/*` 경로. 한 경로에서 "인증 선택"을 하지 않는다.
+2. **로그인은 선택.** 비로그인은 `/public/*` 경로, 로그인은 Google ID 토큰 JWT(HTTP API JWT Authorizer)가 걸린 `/jobs`, `/me/*` 경로(M8). 1단계는 게스트만. 한 경로에서 "인증 선택"을 하지 않는다.
 3. **Google OAuth 토큰 미저장.** 유튜브 연결은 브라우저가 받은 짧은 수명 액세스 토큰으로 요청 중 1회 조회하고 버린다. refresh 토큰·KMS 보관 없음.
-4. **Bedrock은 US 리전 하나**(기본 us-east-1)에 전체 스택을 둔다. 모델 ID는 하드코딩하지 말고 설정값으로 둔다.
+4. **스택은 서울(ap-northeast-2), Bedrock은 학교 LLM 게이트웨이**(OpenAI 호환, 모델 별칭 `bedrock-haiku` 등)로 호출한다. 모델 ID·별칭은 하드코딩하지 말고 설정값으로 둔다(결정 0007).
 5. **영상은 내려받지 않는다.** Gemini에는 공개 YouTube URL만 넘긴다.
 6. **Places 응답은 Bedrock에 넘기지 않는다.** 지점 매칭은 일반 코드(규칙)로 한다.
 7. **첫 버전 범위:** 해외 도시 1곳, 요청당 서로 다른 채널 영상 최대 5개, 식당·카페·관광지.
@@ -19,11 +19,11 @@
 ## 기술 스택
 
 - 프론트: React + Vite + TypeScript, Tailwind CSS, TanStack Query, `@vis.gl/react-google-maps`
-- 백엔드: Python 3.12 Lambda(컨테이너 이미지, ECR), Pydantic v2, boto3, google-genai
+- 백엔드: Python 3.12 Lambda(공통 zip 하나), Pydantic v2, boto3, google-genai
 - 오케스트레이션: Step Functions Standard (Inline Map)
-- 저장: DynamoDB 온디맨드 6개 테이블, S3(결과 JSON), SSM Parameter Store(서버 키)
-- 인증: Cognito User Pool(Google IdP) + API Gateway HTTP API JWT Authorizer
-- 인프라: AWS CDK (Python) / CI: GitHub Actions / 로컬: Docker Compose + DynamoDB Local
+- 저장: DynamoDB 온디맨드 6개 테이블, S3(결과 JSON), 설정 버킷 `sgu-clicktotrip-config/keys.json`(서버 키)
+- 인증: Google ID 토큰 + API Gateway HTTP API JWT Authorizer (Cognito 없음, M8)
+- 인프라: 콘솔 수동 배포(`docs/deploy-runbook.md`), 모든 리소스 이름 `sgu-clicktotrip-` 접두사, 역할은 `SafeRole-sgu-clicktotrip`만 / CI: GitHub Actions(테스트·zip 빌드) / 로컬: Docker Compose + DynamoDB Local
 - 테스트: pytest, moto, Vitest
 
 ## 저장소 구조
@@ -33,7 +33,7 @@ frontend/                 React 앱
 backend/functions/<name>/ Lambda 핸들러 (api_public, api_jobs, api_me, collect, observe, interpret, match, aggregate, cleanup)
 backend/shared/           schemas/ (Pydantic), repos/ (DynamoDB·S3), clients/ (youtube, gemini, bedrock, places), rules/ (matching, aggregation, time_evidence, ranking)
 backend/tests/            unit/, integration/, fixtures/
-infra/                    CDK 앱 (stacks/)
+infra/                    config.py(설정값 목록), asl/(Step Functions 정의), deploy/(CloudShell 스크립트 초안, 보류)
 experiments/              정답셋 라벨, 규칙 vs Bedrock 비교 스크립트, 결과
 docs/                     기획서, implementation-spec, decisions/
 ```
@@ -66,4 +66,4 @@ docs/                     기획서, implementation-spec, decisions/
 - 마일스톤 순서는 `docs/implementation-spec.md`의 "구현 순서"를 따른다. 한 번에 한 마일스톤만 진행하고, 완료 조건(테스트 통과)을 확인한 뒤 다음으로 간다.
 - 명세에 없는 결정이 필요하면 임의로 정하지 말고 `docs/decisions/`에 제안 파일을 만들고 사람에게 묻는다.
 - 모델 ID, 리전, 한도 값처럼 콘솔에서 확인해야 하는 값은 `infra/config.py`와 환경 변수로 빼고 TODO로 표시한다.
-- 명령: `make test` (pytest + vitest), `make lint` (ruff, mypy, eslint, tsc), `make local` (docker compose up), `cdk synth`.
+- 명령: `make test` (pytest + vitest), `make lint` (ruff, mypy, eslint, tsc), `make local` (docker compose up).

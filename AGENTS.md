@@ -37,7 +37,7 @@
 | M2 | `shared/rules`: matching, aggregation, time_evidence, ranking, replacement | ✅ 완료 |
 | M3 | `shared/clients`: youtube, gemini, bedrock, places + `tests/fakes` | ✅ 완료 |
 | M4 | Lambda 핸들러 + DynamoDB Local 통합 테스트 | ✅ 완료 |
-| **M5** | CDK 스택 배포 | ⏳ **다음** |
+| **M5** | 배포: zip 빌드(CI) + Step Functions ASL + 콘솔 runbook + 첫 배포 (결정 0007) | ⏳ **다음** |
 | M6 | 프론트 1단계 화면 | 대기 |
 | M7 | 실제 키 검증, 규칙 vs Bedrock 비교 실험 | 대기 |
 | M8 | 로그인·개인화 (2단계) | 대기 |
@@ -66,11 +66,11 @@ backend/shared/
 │   └─ replacement.py    실패 영상 대체 선택
 ├─ clients/      외부 API 호출은 여기에만
 │   ├─ youtube.py  gemini.py  bedrock.py  places.py   (각각 Protocol + 실제 구현)
-│   ├─ secrets.py  SSM Parameter Store에서 서버 키 읽기
+│   ├─ secrets.py  서버 키 읽기 (지금 SSM → M5에서 설정 버킷 keys.json으로, 결정 0007-3)
 │   └─ http.py     테스트에서 바꿔 끼우는 HTTP 전송
 ├─ prompts/      observe.md (Gemini), interpret.md (Bedrock)
 ├─ repos/        Jobs(낙관적 잠금), VideoAnalysis(조건부 선점), Places, CoordCache, YoutubeCache, S3 BlobStore
-└─ settings.py   환경 변수 설정 (CDK가 infra/config.py 값을 넘긴다)
+└─ settings.py   환경 변수 설정 (값 목록은 infra/config.py, 콘솔에서 Lambda에 입력)
 
 backend/functions/<name>/handler.py   collect, claim, observe, interpret, match, aggregate, api_public 구현 (M4)
                                       api_jobs, api_me(M8), cleanup(M5 이후)은 아직 껍데기
@@ -91,7 +91,7 @@ make install   # uv sync + npm ci + pre-commit 훅 설치 (처음 한 번)
 make lint      # ruff, ruff format --check, mypy(strict), eslint, tsc
 make test      # pytest + vitest
 make local     # docker compose up (DynamoDB Local :8000)
-make synth     # cdk synth
+make synth     # cdk synth (M5에서 CDK 제거 예정, 결정 0007-5)
 make fmt       # ruff 자동 수정·포맷
 ```
 
@@ -213,12 +213,12 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 
 | 질문 | 관련 |
 | --- | --- |
-| 결정 [0006](docs/decisions/0006-관찰-품질.md) 제안 확정 (관찰 재생 위치 MM:SS, 프롬프트 v2, 이름 뒷받침 규칙, 지어낸 단서 지표, Gemini 재시도·하루 예산·길이 상한, 설명란·고정 댓글, 해상도·구간 정책). **진행 중 실험의 인계 목록:** [실험 기록](experiments/results/2026-10-21-gemini-observe.md)의 "다음 할 일 (인계)", 스크립트 [experiments/gemini_observe/](experiments/gemini_observe/) | M7 시작 전 |
-| 학교 계정의 허용 US 리전, 각 모델 ID·Converse 지원·구조화 출력 지원 | `infra/config.py` TODO(verify), M5·M7 |
+| 학교 LLM 게이트웨이: 구조화 출력 지원, Lambda(서울)에서 연결, 키 한도 (결정 0007-1 TODO) | M5·M7 |
 | Gemini 사용 허용 여부 (불허 시 M7 전에 대체 모드 논의) | spec §12 |
-| 학교 계정 CDK bootstrap·IAM·OIDC 가능 여부 | M5 |
+| 학교 계정에서 콘솔로 테이블·함수·상태 머신 생성 권한 (첫 배포에서 확인) | M5 |
+| 설명란 지도 짧은 링크 리다이렉트 사용: Maps 약관 (결정 0006-6) | M7 |
 | Google Cloud 결제·상한 설정 | M7 |
-| 첫 검증 도시와 영상 5개 | M7 |
+| 첫 검증 도시와 영상 5개 (시연 도시 겸용, 오사카 유력) | M7 |
 
 ---
 
@@ -230,3 +230,5 @@ M4 완료 조건: **fixture 영상 2개로 end-to-end 결과 JSON 생성** (Dyna
 | [0002](docs/decisions/0002-M1-스키마-빈틈.md) | SCENE은 DAY/NIGHT만 · 영상 상태 PENDING/ANALYZING 추가 + 조회 응답 `videos` · YoutubeCache 필드 · 결과 `name`은 영상 기반 표기, 화면 지점명은 Google에서 실시간 · 실패 영상은 Bedrock 1회 재요청 → 예비 영상 대체(작업당 1개) |
 | [0003](docs/decisions/0003-M2-규칙-빈틈.md) | 평가는 VISITED만 · 방문 기반 시간 근거는 VISITED만(CREATOR_TIP 예외) · 대기 방향은 `ratings.wait` · 대체 성공 시 SUCCEEDED · 스타일↔분류 매핑 · 언급만 된 장소는 순위 제외 |
 | [0004](docs/decisions/0004-M4-핸들러-빈틈.md) | claim 별도 Lambda(실패 기록 포함) · 대체 영상은 aggregate · 영상별 매칭 요약 S3 · 좌표 만료 장소는 지도에서 제외 · YouTube 검색 하루 90회 · jobId는 requestId에서 결정적 생성 |
+| [0006](docs/decisions/0006-관찰-품질.md) | 관찰 재생 위치는 \"MM:SS\" 문자열 · 프롬프트 v2 + 배경 간판 금지 · 이름 뒷받침 규칙 C(약하면 미확정) · 지어낸 단서 지표 · Gemini 재시도·하루 예산 18·길이 30분 · 설명란·고정 댓글 근거 · LOW·전체 영상 |
+| [0007](docs/decisions/0007-학교-AWS-계정-제약.md) | 서울 리전 · Bedrock은 학교 게이트웨이(`bedrock-haiku`) · 1단계 게스트만, M8은 Google ID 토큰 JWT(Cognito 없음) · 키는 설정 버킷 · `sgu-clicktotrip-` 접두사 · 배포는 zip + 콘솔 직접 |
