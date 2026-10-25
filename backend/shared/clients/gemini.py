@@ -1,4 +1,4 @@
-"""Gemini 관찰 (spec §5.2). 영상은 내려받지 않고 공개 YouTube URL만 넘긴다.
+"""[2-2] Gemini 관찰 (spec §5.2). 영상은 내려받지 않고 공개 YouTube URL만 넘긴다.
 
 - JSON 모드 + ObservationResult 스키마. 검증 실패 시 1회 재요청, 그래도 실패면 InvalidModelOutput.
 - 타임아웃: SDK < Lambda < Step Functions Task.

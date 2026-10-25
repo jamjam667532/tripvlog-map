@@ -1,4 +1,4 @@
-"""cleanup Lambda 핸들러. 구현은 spec §11 마일스톤에서 채운다."""
+"""[매일] cleanup Lambda 핸들러. 구현은 spec §11 마일스톤에서 채운다."""
 
 from typing import Any
 

@@ -1,4 +1,4 @@
-"""Bedrock 해석 (spec §5.3). Converse API로 통일하고 모델 ID만 바꿔 쓴다.
+"""[2-3] Bedrock 해석 (spec §5.3). Converse API로 통일하고 모델 ID만 바꿔 쓴다.
 
 - 구조화 출력(outputConfig.textFormat = json_schema)으로 InterpretationResult 형식을 강제한다.
   모델이 지원하지 않으면 structured_output=False로 두고 프롬프트의 JSON 지시에만 의존한다.

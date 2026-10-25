@@ -1,4 +1,4 @@
-"""aggregate: 실패 영상 대체 연결과 결과 집계 (spec §5.5, 결정 0002-5·0003·0004-2).
+"""[3][4] aggregate: 실패 영상 대체 연결과 결과 집계 (spec §5.5, 결정 0002-5·0003·0004-2).
 
 action=replace
   대체되지 않은 FAILED 영상이 있으면 예비 영상 하나를 videoRefs에 넣고(replaces) 돌려준다.

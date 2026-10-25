@@ -1,4 +1,4 @@
-"""claim: 영상 분석 선점과 실패 기록 (spec §4.2, 결정 0004-1·2).
+"""[2-1][2-x] claim: 영상 분석 선점과 실패 기록 (spec §4.2, 결정 0004-1·2).
 
 action=claim (기본)
   VideoAnalysis 조건부 선점 → ANALYZE(분석 진행) / REUSE(이미 DONE, 분석 생략)

@@ -1,4 +1,7 @@
-"""서버 키는 SSM Parameter Store(SecureString)에서 읽고 프로세스 안에서만 캐시한다. 로그 금지."""
+"""[1][2-2][2-4] 서버 키는 SSM Parameter Store(SecureString)에서 읽고 프로세스 안에서만 캐시한다.
+
+로그 금지.
+"""
 
 from functools import lru_cache
 from typing import Any

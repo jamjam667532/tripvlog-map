@@ -1,4 +1,4 @@
-"""Step Functions 단계 사이의 이벤트 계약. ID·상태·S3 키만 넘긴다(256 KiB 제한).
+"""[0]~[4] Step Functions 단계 사이의 이벤트 계약. ID·상태·S3 키만 넘긴다(256 KiB 제한).
 
 흐름 (결정 0004):
   collect → Map(videoRefs){ claim ─ANALYZE→ observe → interpret → match

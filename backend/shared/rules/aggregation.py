@@ -1,4 +1,4 @@
-"""채널 단위 집계 (spec §5.5). 한 채널은 한 장소에 한 표만 가진다."""
+"""[4] 채널 단위 집계 (spec §5.5). 한 채널은 한 장소에 한 표만 가진다."""
 
 from collections import defaultdict
 from collections.abc import Iterable, Sequence

@@ -1,4 +1,4 @@
-"""interpret: Bedrock으로 관찰 결과를 해석한다 (spec §5.3). Places 응답은 넘기지 않는다.
+"""[2-3] interpret: Bedrock으로 관찰 결과를 해석한다 (spec §5.3). Places 응답은 넘기지 않는다.
 
 입력 observation S3 키 → 해석 결과를 S3 analysis/{videoId}/{version}/interpretation.json에 쓴다.
 형식 검증 실패 시 이 영상의 Bedrock만 1회 재요청(클라이언트).

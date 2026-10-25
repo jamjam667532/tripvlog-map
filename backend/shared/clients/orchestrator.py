@@ -1,4 +1,4 @@
-"""Step Functions 실행 시작. 실행 이름은 jobId(같은 작업은 한 번만 시작된다)."""
+"""[0] Step Functions 실행 시작. 실행 이름은 jobId(같은 작업은 한 번만 시작된다)."""
 
 import json
 from typing import Any, Protocol

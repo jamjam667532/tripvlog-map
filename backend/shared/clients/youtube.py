@@ -1,4 +1,4 @@
-"""YouTube Data API v3 (spec §5.1). search.list(100 units), videos.list(1 unit)."""
+"""[1] YouTube Data API v3 (spec §5.1). search.list(100 units), videos.list(1 unit)."""
 
 import re
 import urllib.parse

@@ -1,6 +1,6 @@
 # CLAUDE.md — tripvlog-map
 
-이 파일은 Claude Code가 세션마다 가장 먼저 읽는 프로젝트 규칙이다. 상세 명세는 `docs/implementation-spec.md`, 기획 배경은 `docs/기획서.md`, 결정 기록은 `docs/decisions/`에 있다. 규칙이 충돌하면 이 파일 → implementation-spec → 기획서 순서로 따른다.
+이 파일은 Claude Code가 세션마다 가장 먼저 읽는 프로젝트 규칙이다. 처리 흐름 요약은 `docs/pipeline.md`(코드의 `[1]`, `[2-2]` 같은 단계 번호), 상세 명세는 `docs/implementation-spec.md`, 기획 배경은 `docs/기획서.md`, 결정 기록은 `docs/decisions/`에 있다. 규칙이 충돌하면 이 파일 → implementation-spec → 기획서 순서로 따른다.
 
 ## 프로젝트 한 줄 요약
 

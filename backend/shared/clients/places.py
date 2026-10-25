@@ -1,4 +1,4 @@
-"""Google Places API (New) Text Search (spec §5.4).
+"""[2-4] Google Places API (New) Text Search (spec §5.4).
 
 - FieldMask로 매칭에 필요한 최소 필드만 요청한다.
 - 응답은 메모리에서만 쓰고 로그·S3·DynamoDB에 남기지 않는다.

@@ -1,4 +1,4 @@
-"""match: 해석 후보를 Places Text Search 결과와 규칙으로 맞춘다 (spec §5.4).
+"""[2-4] match: 해석 후보를 Places Text Search 결과와 규칙으로 맞춘다 (spec §5.4).
 
 - Places 응답은 메모리에서만 쓴다. Bedrock에 넘기지 않고,
   로그·S3·DynamoDB에 이름·주소를 남기지 않는다.

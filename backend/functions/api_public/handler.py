@@ -1,4 +1,4 @@
-"""api_public: 비로그인 경로 (spec §3.1·3.2). API Gateway HTTP API 페이로드 2.0.
+"""[0] api_public: 비로그인 경로 (spec §3.1·3.2). API Gateway HTTP API 페이로드 2.0.
 
 POST /public/jobs
   같은 requestId는 같은 jobId → 조건부 쓰기로 중복을 원자적으로 막는다(결정 0004-6). 중복이면 409.

@@ -1,4 +1,4 @@
-"""collect: 목적지로 영상 후보를 찾고 분석할 영상 5개 + 예비 3개를 고른다 (spec §5.1).
+"""[1] collect: 목적지로 영상 후보를 찾고 분석할 영상 5개 + 예비 3개를 고른다 (spec §5.1).
 
 입력 {jobId} → 출력 {jobId, videoRefs:[{jobId, videoId, channelId, analysisVersion}]}
 YouTube 검색 결과·메타데이터는 YoutubeCache(25일)를 먼저 본다. 조회수 등 지표는 쓰지 않는다.

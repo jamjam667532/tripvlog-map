@@ -1,4 +1,5 @@
-"""observe: Gemini로 영상을 관찰한다 (spec §5.2). 영상은 내려받지 않고 공개 YouTube URL만 넘긴다.
+"""[2-2] observe: Gemini로 영상을 관찰한다 (spec §5.2).
+영상은 내려받지 않고 공개 YouTube URL만 넘긴다.
 
 입력 VideoTask → 관찰 결과를 S3 analysis/{videoId}/{version}/observation.json에 쓰고 키만 돌려준다.
 검증 실패 재요청은 클라이언트가 1회 한다. 그래도 실패하면 예외 → Step Functions Catch → claim(fail).
