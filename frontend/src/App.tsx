@@ -75,6 +75,8 @@ export default function App({ api = defaultApi }: { api?: Api }) {
           : null;
 
   const result = job.data?.result;
+  // 진행 중에는 장소가 하나라도 생겨야 결과 화면으로 넘어간다(빈 중간 결과로 진행 화면을 가리지 않게)
+  const showResult = !!result && (terminal ? result.analyzedChannels > 0 : result.places.length > 0);
 
   return (
     <div className="flex h-dvh flex-col bg-[#F7F5F0] text-stone-900">
@@ -96,9 +98,9 @@ export default function App({ api = defaultApi }: { api?: Api }) {
           </div>
           <JobForm onSubmit={(req) => create.mutate(req)} submitting={create.isPending} error={createError} />
         </main>
-      ) : result ? (
+      ) : showResult ? (
         <ResultView
-          result={result}
+          result={result!}
           stage={job.data?.resultStage}
           videos={job.data?.videos ?? []}
           demo={api.mode === "mock"}
@@ -107,6 +109,11 @@ export default function App({ api = defaultApi }: { api?: Api }) {
       ) : terminal ? (
         <main className="flex flex-1 flex-col items-center justify-center gap-4 px-4">
           <p className="text-lg font-bold text-[#14213D]">분석에 실패했습니다</p>
+          <p className="max-w-md text-center text-sm text-stone-600">
+            영상을 하나도 분석하지 못했어요
+            {result?.failedVideos ? `(실패 ${result.failedVideos}개)` : ""}. AI 요청 한도에 걸렸을 수 있으니 잠시 후 다시
+            시도해 주세요.
+          </p>
           <button type="button" onClick={reset} className="rounded-xl bg-[#E2703A] px-5 py-2 font-bold text-white">
             새로 검색
           </button>
