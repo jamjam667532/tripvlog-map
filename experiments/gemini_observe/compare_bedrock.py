@@ -115,9 +115,9 @@ def main() -> None:
             found += c.seen_text.split("\n")
         return [s.strip() for s in found if 1 < len(s.strip()) <= 25]
 
-    def pool(anchored: bool) -> list[tuple[int, str]]:
-        items: list[tuple[int, str]] = []
-        for c in clues:
+    def pool(anchored: bool) -> list[tuple[int, int, str]]:
+        items: list[tuple[int, int, str]] = []
+        for j, c in enumerate(clues):
             near_addr = any(
                 ADDR.search(text(d))
                 for d in clues
@@ -125,19 +125,23 @@ def main() -> None:
             )
             if anchored and not near_addr and not c.heard_name:
                 continue
-            items += [(c.start_sec, s) for s in lines(c) if not (anchored and ADDR.search(s))]
+            items += [(c.start_sec, j, s) for s in lines(c) if not (anchored and ADDR.search(s))]
         return items
 
     for label, anchored in (("모든 짧은 글자", False), ("주소 근처 글자 + 들린 이름", True)):
         items = pool(anchored)
-        found = [p for p in places if any(hits(s, p[1]) for _, s in items)]
+        found = [p for p in places if any(hits(s, p[1]) for _, _, s in items)]
         ok = 0
         for t, keys in utters:
             i, tp = clue_of(keys, t), truth(t)
-            prev = [(tm, s) for tm, s in items if i is not None and tm <= clues[i].start_sec]
+            prev = [
+                (tm, s)
+                for tm, j, s in items
+                if i is not None and tm <= clues[i].start_sec and j != i  # 평가 문장 자신은 제외
+            ]
             ok += bool(prev and tp and hits(max(prev)[1], tp))
         print(
-            f"[규칙: {label}] 검색 후보 {len({norm(s) for _, s in items})}개"
+            f"[규칙: {label}] 검색 후보 {len({norm(s) for _, _, s in items})}개"
             f" · 정답 장소 {len(found)}/{len(places)}"
             f" · 평가를 가장 가까운 앞쪽 글자에 붙여 올바른 장소 {ok}/{len(utters)}"
         )
