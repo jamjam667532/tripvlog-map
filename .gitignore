@@ -17,3 +17,7 @@ frontend/coverage/
 
 # CDK
 cdk.out/
+
+# Lambda zip 빌드 산출물 (infra/deploy/build_zip.sh)
+/build/
+/dist/

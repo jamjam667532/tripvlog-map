@@ -1,0 +1,249 @@
+{
+  "Comment": "sgu-clicktotrip-analyze: 요청 1건의 분석 흐름. 원본은 backend/shared/schemas/events.py와 backend/tests/integration/pipeline.py. ${account}는 콘솔에 붙여 넣기 전에 계정 번호로 바꾼다.",
+  "StartAt": "Collect",
+  "States": {
+    "Collect": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-collect",
+        "Payload.$": "$"
+      },
+      "OutputPath": "$.Payload",
+      "TimeoutSeconds": 90,
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "CollectFailed" }],
+      "Next": "AnalyzeVideos"
+    },
+    "CollectFailed": {
+      "Type": "Fail",
+      "Error": "CollectFailed",
+      "Cause": "영상 수집 단계 실패. 작업 상태는 이 실행에서 바꾸지 않는다(docs/deploy-runbook.md 알려진 한계)."
+    },
+    "AnalyzeVideos": {
+      "Type": "Map",
+      "ItemsPath": "$.videoRefs",
+      "MaxConcurrency": 1,
+      "ResultPath": null,
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "Claim",
+        "States": {
+          "Claim": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-claim",
+              "Payload.$": "$"
+            },
+            "OutputPath": "$.Payload",
+            "TimeoutSeconds": 40,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Next": "Decide"
+          },
+          "Decide": {
+            "Type": "Choice",
+            "Choices": [
+              { "Variable": "$.decision", "StringEquals": "REUSE", "Next": "Snapshot" },
+              { "Variable": "$.decision", "StringEquals": "WAIT", "Next": "WaitForOtherJob" }
+            ],
+            "Default": "Observe"
+          },
+          "WaitForOtherJob": {
+            "Type": "Wait",
+            "Seconds": 30,
+            "Next": "Claim"
+          },
+          "Observe": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-observe",
+              "Payload.$": "$"
+            },
+            "OutputPath": "$.Payload",
+            "TimeoutSeconds": 930,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 2,
+                "BackoffRate": 2
+              }
+            ],
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Next": "Interpret"
+          },
+          "Interpret": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-interpret",
+              "Payload.$": "$"
+            },
+            "OutputPath": "$.Payload",
+            "TimeoutSeconds": 330,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 2,
+                "BackoffRate": 2
+              }
+            ],
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Next": "Match"
+          },
+          "Match": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-match",
+              "Payload.$": "$"
+            },
+            "OutputPath": "$.Payload",
+            "TimeoutSeconds": 150,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 2,
+                "BackoffRate": 2
+              }
+            ],
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Next": "Snapshot"
+          },
+          "MarkFailed": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-claim",
+              "Payload": {
+                "action": "fail",
+                "jobId.$": "$.jobId",
+                "videoId.$": "$.videoId",
+                "channelId.$": "$.channelId",
+                "analysisVersion.$": "$.analysisVersion",
+                "error.$": "$.error"
+              }
+            },
+            "OutputPath": "$.Payload",
+            "TimeoutSeconds": 40,
+            "Retry": [
+              {
+                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "Next": "Snapshot"
+          },
+          "Snapshot": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+              "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-aggregate",
+              "Payload": {
+                "action": "snapshot",
+                "jobId.$": "$.jobId"
+              }
+            },
+            "ResultPath": null,
+            "TimeoutSeconds": 150,
+            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": null, "Next": "SnapshotSkipped" }],
+            "End": true
+          },
+          "SnapshotSkipped": {
+            "Type": "Pass",
+            "Comment": "진행 중 결과(지도 중간 표시) 실패는 분석을 멈추지 않는다. 마지막 aggregate가 다시 쓴다.",
+            "End": true
+          }
+        }
+      },
+      "Next": "Replace"
+    },
+    "Replace": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-aggregate",
+        "Payload": {
+          "action": "replace",
+          "jobId.$": "$.jobId"
+        }
+      },
+      "OutputPath": "$.Payload",
+      "TimeoutSeconds": 150,
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "HasReplacement"
+    },
+    "HasReplacement": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            { "Variable": "$.replacement", "IsPresent": true },
+            { "Variable": "$.replacement", "IsNull": false }
+          ],
+          "Next": "WrapReplacement"
+        }
+      ],
+      "Default": "Aggregate"
+    },
+    "WrapReplacement": {
+      "Type": "Pass",
+      "Comment": "대체 영상 1개를 같은 영상 흐름(AnalyzeVideos)에 다시 태운다. 횟수 상한은 aggregate가 지킨다(MAX_REPLACEMENTS_PER_JOB).",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "videoRefs.$": "States.Array($.replacement)"
+      },
+      "Next": "AnalyzeVideos"
+    },
+    "Aggregate": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-northeast-2:${account}:function:sgu-clicktotrip-aggregate",
+        "Payload": {
+          "action": "aggregate",
+          "jobId.$": "$.jobId"
+        }
+      },
+      "OutputPath": "$.Payload",
+      "TimeoutSeconds": 150,
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "End": true
+    }
+  }
+}

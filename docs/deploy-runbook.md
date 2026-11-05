@@ -1,6 +1,6 @@
 # AWS 배포 명세서 (M5, 학교 계정)
 
-> 상태: **초안** · 기준일 2026-11-05 · 근거: 결정 0007(계정 제약), 0008(실시간 분석), implementation-spec §2·§4·§11
+> 상태: **초안** (C1~C3 코드 완료, 콘솔 작업 전) · 기준일 2026-11-05 · 근거: 결정 0007(계정 제약), 0008(실시간 분석), implementation-spec §2·§4·§11
 > 대상: 배포를 맡는 사람(남현우)과 코드를 고치는 에이전트. 값이 사람 확인이 필요한 곳은 **[확인]**으로 표시했다.
 > 이 문서는 명세다. 리소스는 사람이 콘솔에서 직접 만든다(결정 0007-5). `infra/deploy/`의 CloudShell 스크립트는 보관만 한다.
 
@@ -13,15 +13,15 @@
 
 | # | 할 일 | 위치 | 이유 | 완료 조건 |
 | --- | --- | --- | --- | --- |
-| C1 | 서버 키를 SSM 대신 설정 버킷 `keys.json`에서 읽는다. `Settings`의 `*_key_param`을 `CONFIG_BUCKET`·`CONFIG_KEY`로 바꾸고, collect·match·observe의 `get_secret` 호출을 새 이름으로 바꾼다 | `shared/clients/secrets.py`, `shared/settings.py`, `functions/{collect,match,observe}/handler.py` | SSM 불허(결정 0007-3). 지금 코드는 `boto3.client("ssm")`을 부른다 | moto S3 테스트 통과, 로그에 값·JSON 없음 |
-| C2 | interpret 핸들러를 `BedrockConverseInterpreter`(boto3 직접 호출) 대신 학교 게이트웨이 `GatewayChatInterpreter`로 바꾼다. 키·주소는 `keys.json`의 `llm_api_key`·`llm_base_url`. 모델은 별칭 `bedrock-haiku` | `functions/interpret/handler.py` (구성은 `backend/local/server.py`가 이미 쓰는 것을 따른다) | 계정은 Bedrock을 게이트웨이로만 쓴다(결정 0007-1). `ChunkedInterpreter`는 유지 | 단위 테스트 통과(가짜 게이트웨이) |
-| C3 | Step Functions ASL 작성 | `infra/asl/analyze.asl.json` (**아직 없음**) | §6 흐름 명세대로 | `tests/integration/pipeline.py`와 같은 순서·이벤트 |
+| ✅ C1 | 서버 키를 SSM 대신 설정 버킷 `keys.json`에서 읽는다. `Settings`의 `*_key_param`을 `CONFIG_BUCKET`·`CONFIG_KEY`로 바꾸고, collect·match·observe의 `get_secret` 호출을 새 이름으로 바꾼다 | `shared/clients/secrets.py`, `shared/settings.py`, `functions/{collect,match,observe}/handler.py` | SSM 불허(결정 0007-3). 지금 코드는 `boto3.client("ssm")`을 부른다 | moto S3 테스트 통과, 로그에 값·JSON 없음 |
+| ✅ C2 | interpret 핸들러를 `BedrockConverseInterpreter`(boto3 직접 호출) 대신 학교 게이트웨이 `GatewayChatInterpreter`로 바꾼다. 키·주소는 `keys.json`의 `llm_api_key`·`llm_base_url`. 모델은 별칭 `bedrock-haiku` | `functions/interpret/handler.py` (구성은 `backend/local/server.py`가 이미 쓰는 것을 따른다) | 계정은 Bedrock을 게이트웨이로만 쓴다(결정 0007-1). `ChunkedInterpreter`는 유지 | 단위 테스트 통과(가짜 게이트웨이) |
+| ✅ C3 | Step Functions ASL 작성 | `infra/asl/analyze.asl.json` | §6 흐름 명세대로 | `tests/integration/pipeline.py`와 같은 순서·이벤트 |
 | C4 | **Gemini 요청 제한을 Lambda 전체에서 지키는 방법 정하기** | §9-A | `RateLimiter`는 프로세스 안에서만 센다. Lambda는 동시에 실행되면 환경이 따로라서 영상 5개를 병렬로 돌리면 모델별 분당 14회를 환경마다 따로 센다 | 결정 확정 후 구현 |
 | C5 | Gemini 하루 예산 카운터 | 아직 없음. 지금은 YouTube 검색 카운터(`take_search_quota`)만 있다 | 결정 0006-5의 "하루 18"은 영상 통째로 보내던 때 기준이다. 구간 방식은 영상당 요청이 훨씬 많다 | **[확인]** 하루 상한 값 |
 | C6 | CDK 앱 삭제, `infra/config.py` 갱신(리전 `us-east-1` → 서울, 모델 ID 항목은 별칭으로) | `infra/` | 결정 0007-5·0007 영향 표 | 값 목록만 남음 |
 | C7 | 배포용 `ANALYSIS_VERSION` 확정 | 환경 변수 | 이 값이 바뀌면 **저장된 분석이 전부 재사용되지 않는다**(비용). 값을 고정하고 올릴 때는 결정 기록을 남긴다 | **[확인]** 제안: `v2-seg190` (발표 8쪽 예시와 같음) |
 
-C1·C2는 코드 변경이 작다. C3~C5가 배포의 병목이다.
+**C1~C3는 브랜치 `feature/aws-first-deploy`에서 끝났다**(pytest 302개, ruff·mypy 통과, ASL 정합성 테스트 10개 포함). 남은 C4~C7은 값·결정이 필요하다. **C4가 병렬 분석의 병목이다.** 첫 배포는 Map 동시성 1(영상 한 줄)로 시작한다.
 
 ## 3. 학교 계정 제약 (결정 0007)
 
@@ -133,7 +133,13 @@ C1·C2는 코드 변경이 작다. C3~C5가 배포의 병목이다.
 4. **aggregate** (기본 action) → 결과 JSON 저장, 상태 종료
 - 단계 사이에는 **ID·상태·S3 키만** 넘긴다(256 KiB 제한).
 - Map `MaxConcurrency`는 §9-A 결정에 따른다.
-- 진행 중 결과(`live_result`)는 aggregate의 snapshot 동작이 만든다. 이것을 호출하는 위치도 ASL에 포함할지 프론트 단계 표시와 맞춰 확인한다. **[확인]**
+- 영상 하나가 끝날 때(REUSE·성공·실패)마다 `aggregate(action=snapshot)`을 부른다. 지도 중간 표시용이고, 실패해도 분석은 멈추지 않는다(`SnapshotSkipped`).
+
+**ASL의 알려진 한계**
+1. **collect가 실패하면 Jobs 상태가 바뀌지 않는다.** 실행은 `CollectFailed`로 끝나지만 조회는 계속 진행 중으로 보인다. 작업을 FAILED로 바꾸는 동작이 지금 핸들러에 없다. 추가 방법(collect 안에서 처리, 또는 aggregate 동작 추가)은 다음 작업이다.
+2. Snapshot은 같은 `live.json`을 쓴다. 로컬 서버는 락으로 막는다. Map 동시성이 1인 지금은 겹치지 않지만, §9-A로 병렬을 켜면 겹칠 수 있다.
+3. Retry는 Lambda 서비스 오류에만 건다. 게이트웨이 `BUDGET_EXCEEDED`·설정 오류는 곧바로 영상 실패로 기록된다(결정 0007-1).
+4. Task 타임아웃은 Lambda 타임아웃보다 조금 길게(observe 930초 등) 잡았다. 실측 후 조정한다.
 
 ## 6. 콘솔 작업 순서
 
@@ -143,7 +149,7 @@ C1·C2는 코드 변경이 작다. C3~C5가 배포의 병목이다.
 - [ ] **1. S3 버킷 3개** (§4.2, 퍼블릭 차단). **확인:** 세 버킷 모두 퍼블릭 액세스 차단 상태.
 - [ ] **2. `keys.json` 업로드** (설정 버킷). 값은 화면 공유·캡처에 보이지 않게 한다. **확인:** 객체가 있고, 버킷 정책이 SafeRole만 허용.
 - [ ] **3. DynamoDB 6개** (§4.1, 온디맨드, TTL 2개). **확인:** GSI 이름과 TTL 속성 이름이 표와 같다.
-- [ ] **4. zip 만들기:** CI가 만든 artifact를 받는다(또는 `infra/deploy/build_zip.sh`). **확인:** 크기가 50MB 이하인지. 넘으면 S3에 올려 그 경로로 지정한다.
+- [ ] **4. zip 만들기:** 저장소 루트에서 `bash infra/deploy/build_zip.sh`(uv 필요) → `dist/backend.zip`. **측정값(2026-11-05): zip 10MB, 풀린 크기 36MB**로 한도(50MB·250MB) 안이다. 콘솔 업로드 한도를 넘지 않으면 직접 올리고, 넘으면 S3에 올려 그 경로로 지정한다. 리눅스용 바이너리로 받으므로 맥에서 직접 실행해 볼 수는 없다.
 - [ ] **5. Lambda 8개** (§4.3, §4.4). **확인:** 함수마다 핸들러 경로 오타가 없는지, 환경 변수에 비밀값이 없는지.
 - [ ] **6. 함수 단독 테스트:** claim·collect를 콘솔의 테스트 이벤트로 실행한다(fixture 목적지). **확인:** 오류 없이 JSON을 돌려주고, 로그에 키가 없다. 이때 **Lambda(서울)에서 게이트웨이로 나가는 연결**을 interpret로 확인한다(0007 TODO).
 - [ ] **7. Step Functions 생성** (§5). **확인:** 콘솔에서 테스트 실행 1회가 끝까지 간다.
