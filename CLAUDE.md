@@ -23,7 +23,7 @@
 - 오케스트레이션: Step Functions Standard (Inline Map)
 - 저장: DynamoDB 온디맨드 6개 테이블, S3(결과 JSON), 설정 버킷 `sgu-clicktotrip-config/keys.json`(서버 키)
 - 인증: Google ID 토큰 + API Gateway HTTP API JWT Authorizer (Cognito 없음, M8)
-- 인프라: 콘솔 수동 배포(`docs/deploy-runbook.md`), 모든 리소스 이름 `sgu-clicktotrip-` 접두사, 역할은 `SafeRole-sgu-clicktotrip`만 / CI: GitHub Actions(테스트·zip 빌드) / 로컬: Docker Compose + DynamoDB Local
+- 인프라: 콘솔 수동 배포(`docs/setup-ec2-lambda.md`, `docs/deploy-runbook.md`), 프론트는 EC2 nginx 한 대(결정 0009), 모든 리소스 이름 `sgu-clicktotrip-` 접두사, 역할은 `SafeRole-sgu-clicktotrip`만 / CI: GitHub Actions(테스트·zip 빌드) / 로컬: Docker Compose + DynamoDB Local
 - 테스트: pytest, moto, Vitest
 
 ## 저장소 구조
@@ -57,7 +57,7 @@ docs/                     기획서, implementation-spec, decisions/
 - 조회수·좋아요 수·구독자 수·업로드일을 장소 점수에 쓰지 않는다(검색 정렬에만 사용 가능).
 - Google 응답의 이름·주소·카테고리를 DB에 저장하지 않는다(장소 ID와 25일 임시 좌표만).
 - yt-dlp 등으로 영상을 내려받지 않는다.
-- 쿠버네티스·젠킨스·EC2 상시 서버를 추가하지 않는다.
+- 쿠버네티스·젠킨스를 추가하지 않는다. EC2는 프론트 서버 1대만 쓰고(결정 0009) 분석 로직을 두지 않는다.
 - 실제 유료 API(Gemini, Places, Bedrock)를 테스트에서 호출하지 않는다. fixture와 mock을 쓴다.
 
 ## 작업 방식

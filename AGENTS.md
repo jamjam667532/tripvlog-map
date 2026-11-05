@@ -111,7 +111,7 @@ make fmt       # ruff 자동 수정·포맷
 - 영상 내려받기(yt-dlp 등). Gemini에는 공개 YouTube URL만
 - Places 응답을 Bedrock에 넘기기
 - 테스트에서 실제 유료 API 호출. `backend/tests/fakes`와 fixture를 쓴다
-- 쿠버네티스·젠킨스·EC2 상시 서버 추가
+- 쿠버네티스·젠킨스 추가, 프론트 서버 1대(결정 0009) 외의 EC2와 EC2에 분석 로직 두기
 - 로그에 토큰, guestAccessToken 원문, Places 원문 응답, 좌표 남기기
 
 **할 것**
@@ -225,4 +225,5 @@ M4 완료 시 "반드시 들어가야 할 테스트"(같은 영상 동시 요청
 | [0003](docs/decisions/0003-M2-규칙-빈틈.md) | 평가는 VISITED만 · 방문 기반 시간 근거는 VISITED만(CREATOR_TIP 예외) · 대기 방향은 `ratings.wait` · 대체 성공 시 SUCCEEDED · 스타일↔분류 매핑 · 언급만 된 장소는 순위 제외 |
 | [0004](docs/decisions/0004-M4-핸들러-빈틈.md) | claim 별도 Lambda(실패 기록 포함) · 대체 영상은 aggregate · 영상별 매칭 요약 S3 · 좌표 만료 장소는 지도에서 제외 · YouTube 검색 하루 90회 · jobId는 requestId에서 결정적 생성 |
 | [0006](docs/decisions/0006-관찰-품질.md) | 관찰 재생 위치는 "MM:SS" 문자열 · 프롬프트 v2 + 배경 간판 금지 · 이름 뒷받침 규칙 C(약하면 미확정) · 지어낸 단서 지표 · Gemini 재시도·하루 예산 18·길이 30분 · 설명란·고정 댓글 근거 · LOW·전체 영상 |
+| [0009](docs/decisions/0009-프론트-EC2.md) | 프론트는 EC2 nginx 한 대(CloudFront·웹 버킷 없음), 분석은 Lambda 그대로. 학교 계정 EC2 허용은 확인 필요 |
 | [0007](docs/decisions/0007-학교-AWS-계정-제약.md) | 서울 리전 · Bedrock은 학교 게이트웨이(`bedrock-haiku`) · 1단계 게스트만, M8은 Google ID 토큰 JWT(Cognito 없음) · 키는 설정 버킷 · `sgu-clicktotrip-` 접두사 · 배포는 zip + 콘솔 직접 |
