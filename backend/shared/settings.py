@@ -51,10 +51,9 @@ class Settings:
     gemini_segment_sec: int = 190
     gemini_fps: float = 0.5
     gemini_rpm: int = 14  # 모델별 분당 요청 상한(무료 15에서 1 여유)
-    # SSM Parameter Store 이름 (값이 아니라 이름)
-    gemini_key_param: str = "/tripvlog/gemini-api-key"
-    youtube_key_param: str = "/tripvlog/youtube-api-key"
-    places_key_param: str = "/tripvlog/places-api-key"
+    # 서버 키는 설정 버킷의 keys.json에 있다(결정 0007-3). 여기에는 버킷·객체 이름만 둔다
+    config_bucket: str = "sgu-clicktotrip-config"
+    config_key: str = "keys.json"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Settings":
@@ -92,9 +91,8 @@ class Settings:
             gemini_segment_sec=_int(e, "GEMINI_SEGMENT_SEC", d.gemini_segment_sec),
             gemini_fps=float(e.get("GEMINI_FPS") or d.gemini_fps),
             gemini_rpm=_int(e, "GEMINI_RPM", d.gemini_rpm),
-            gemini_key_param=e.get("GEMINI_KEY_PARAM", d.gemini_key_param),
-            youtube_key_param=e.get("YOUTUBE_KEY_PARAM", d.youtube_key_param),
-            places_key_param=e.get("PLACES_KEY_PARAM", d.places_key_param),
+            config_bucket=e.get("CONFIG_BUCKET", d.config_bucket),
+            config_key=e.get("CONFIG_KEY", d.config_key),
         )
 
 

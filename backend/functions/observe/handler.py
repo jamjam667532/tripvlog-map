@@ -18,7 +18,7 @@ from shared.clients.gemini import (
     RateLimiter,
     SegmentedObserver,
 )
-from shared.clients.secrets import get_secret
+from shared.clients.secrets import SECRET_GEMINI, get_secret
 from shared.repos import Repos, analysis_key, with_metrics
 from shared.schemas.events import ObserveOutput, VideoTask
 from shared.settings import Settings, require
@@ -87,9 +87,7 @@ def make_observer(s: Settings, repos: Repos, api_key: str) -> GeminiObserver:
 def _deps() -> Deps:
     s = Settings.from_env()
     repos = Repos.from_settings(s)
-    return Deps(
-        settings=s, repos=repos, gemini=make_observer(s, repos, get_secret(s.gemini_key_param))
-    )
+    return Deps(settings=s, repos=repos, gemini=make_observer(s, repos, get_secret(SECRET_GEMINI)))
 
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:

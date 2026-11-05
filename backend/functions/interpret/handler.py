@@ -12,10 +12,11 @@ from functools import lru_cache
 from typing import Any
 
 from shared.clients.bedrock import (
-    BedrockConverseInterpreter,
     BedrockInterpreter,
     ChunkedInterpreter,
+    GatewayChatInterpreter,
 )
+from shared.clients.secrets import SECRET_LLM_API_KEY, SECRET_LLM_BASE_URL, get_secret
 from shared.repos import Repos, analysis_key, with_metrics
 from shared.schemas.events import InterpretOutput, ObserveOutput
 from shared.schemas.observation import ObservationResult
@@ -71,10 +72,10 @@ def _deps() -> Deps:
         settings=s,
         repos=Repos.from_settings(s),
         bedrock=ChunkedInterpreter(  # 구간 관찰로 단서가 많아 출력 한도를 넘지 않게 나눠 해석
-            BedrockConverseInterpreter(
+            GatewayChatInterpreter(  # 학교 LLM 게이트웨이(결정 0007-1). 모델은 별칭
                 require(s.bedrock_interpreter_model_id, "BEDROCK_INTERPRETER_MODEL_ID"),
-                region=s.bedrock_region,
-                structured_output=s.bedrock_structured_output,
+                api_key=get_secret(SECRET_LLM_API_KEY),
+                base_url=get_secret(SECRET_LLM_BASE_URL),
             )
         ),
     )

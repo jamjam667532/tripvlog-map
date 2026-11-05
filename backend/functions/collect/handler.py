@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from shared.clients.secrets import get_secret
+from shared.clients.secrets import SECRET_YOUTUBE, get_secret
 from shared.clients.youtube import SearchOrder, YouTubeClient, YouTubeDataApi
 from shared.repos import Repos, search_hash, with_metrics, with_refs
 from shared.rules.selection import merge_round_robin, select_videos
@@ -145,7 +145,7 @@ def _deps() -> Deps:
     return Deps(
         settings=settings,
         repos=Repos.from_settings(settings),
-        youtube=YouTubeDataApi(get_secret(settings.youtube_key_param)),
+        youtube=YouTubeDataApi(get_secret(SECRET_YOUTUBE)),
     )
 
 

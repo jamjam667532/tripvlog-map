@@ -14,7 +14,7 @@ from functools import lru_cache
 from typing import Any
 
 from shared.clients.places import PlacesClient, PlacesTextSearch
-from shared.clients.secrets import get_secret
+from shared.clients.secrets import SECRET_PLACES, get_secret
 from shared.repos import Repos, analysis_key, with_metrics, with_ref_state
 from shared.rules.evidence import display_name, evidence_span
 from shared.rules.matching import match_candidate
@@ -138,7 +138,7 @@ def _deps() -> Deps:
     return Deps(
         settings=s,
         repos=Repos.from_settings(s),
-        places=PlacesTextSearch(get_secret(s.places_key_param)),
+        places=PlacesTextSearch(get_secret(SECRET_PLACES)),
     )
 
 
