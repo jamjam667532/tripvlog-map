@@ -192,3 +192,11 @@ def test_successful_replacement_makes_job_succeeded(repos: Repos, settings: Sett
     job = _job(repos, [ref("v1", "c1", "FAILED"), ref("v2", "c2"), ref("s1", "c3", replaces="v1")])
     out = _aggregate(repos, settings, job)
     assert out.status == "SUCCEEDED"
+
+
+def test_aggregate_without_any_video_fails(repos: Repos, settings: Settings) -> None:
+    """collect가 실패하면 Step Functions가 바로 aggregate를 부른다(영상이 하나도 없다)."""
+    job = _job(repos, [])
+    out = _aggregate(repos, settings, job)
+    assert out.status == "FAILED"
+    assert repos.jobs.require(str(job.job_id)).status == "FAILED"

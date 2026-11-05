@@ -13,19 +13,27 @@
       "TimeoutSeconds": 90,
       "Retry": [
         {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
         }
       ],
-      "Catch": [{ "ErrorEquals": ["States.ALL"], "Next": "CollectFailed" }],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": null,
+          "Next": "Aggregate"
+        }
+      ],
       "Next": "AnalyzeVideos"
-    },
-    "CollectFailed": {
-      "Type": "Fail",
-      "Error": "CollectFailed",
-      "Cause": "영상 수집 단계 실패. 작업 상태는 이 실행에서 바꾸지 않는다(docs/deploy-runbook.md 알려진 한계)."
     },
     "AnalyzeVideos": {
       "Type": "Map",
@@ -33,7 +41,9 @@
       "MaxConcurrency": 1,
       "ResultPath": null,
       "ItemProcessor": {
-        "ProcessorConfig": { "Mode": "INLINE" },
+        "ProcessorConfig": {
+          "Mode": "INLINE"
+        },
         "StartAt": "Claim",
         "States": {
           "Claim": {
@@ -47,20 +57,41 @@
             "TimeoutSeconds": 40,
             "Retry": [
               {
-                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
                 "IntervalSeconds": 2,
                 "MaxAttempts": 3,
                 "BackoffRate": 2
               }
             ],
-            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "ResultPath": "$.error",
+                "Next": "MarkFailed"
+              }
+            ],
             "Next": "Decide"
           },
           "Decide": {
             "Type": "Choice",
             "Choices": [
-              { "Variable": "$.decision", "StringEquals": "REUSE", "Next": "Snapshot" },
-              { "Variable": "$.decision", "StringEquals": "WAIT", "Next": "WaitForOtherJob" }
+              {
+                "Variable": "$.decision",
+                "StringEquals": "REUSE",
+                "Next": "Snapshot"
+              },
+              {
+                "Variable": "$.decision",
+                "StringEquals": "WAIT",
+                "Next": "WaitForOtherJob"
+              }
             ],
             "Default": "Observe"
           },
@@ -80,13 +111,26 @@
             "TimeoutSeconds": 930,
             "Retry": [
               {
-                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
                 "IntervalSeconds": 2,
                 "MaxAttempts": 2,
                 "BackoffRate": 2
               }
             ],
-            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "ResultPath": "$.error",
+                "Next": "MarkFailed"
+              }
+            ],
             "Next": "Interpret"
           },
           "Interpret": {
@@ -100,13 +144,26 @@
             "TimeoutSeconds": 330,
             "Retry": [
               {
-                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
                 "IntervalSeconds": 2,
                 "MaxAttempts": 2,
                 "BackoffRate": 2
               }
             ],
-            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "ResultPath": "$.error",
+                "Next": "MarkFailed"
+              }
+            ],
             "Next": "Match"
           },
           "Match": {
@@ -120,13 +177,26 @@
             "TimeoutSeconds": 150,
             "Retry": [
               {
-                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
                 "IntervalSeconds": 2,
                 "MaxAttempts": 2,
                 "BackoffRate": 2
               }
             ],
-            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "MarkFailed" }],
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "ResultPath": "$.error",
+                "Next": "MarkFailed"
+              }
+            ],
             "Next": "Snapshot"
           },
           "MarkFailed": {
@@ -147,7 +217,12 @@
             "TimeoutSeconds": 40,
             "Retry": [
               {
-                "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+                "ErrorEquals": [
+                  "Lambda.ServiceException",
+                  "Lambda.AWSLambdaException",
+                  "Lambda.SdkClientException",
+                  "Lambda.TooManyRequestsException"
+                ],
                 "IntervalSeconds": 2,
                 "MaxAttempts": 3,
                 "BackoffRate": 2
@@ -167,7 +242,15 @@
             },
             "ResultPath": null,
             "TimeoutSeconds": 150,
-            "Catch": [{ "ErrorEquals": ["States.ALL"], "ResultPath": null, "Next": "SnapshotSkipped" }],
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "ResultPath": null,
+                "Next": "SnapshotSkipped"
+              }
+            ],
             "End": true
           },
           "SnapshotSkipped": {
@@ -193,7 +276,12 @@
       "TimeoutSeconds": 150,
       "Retry": [
         {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2
@@ -206,8 +294,14 @@
       "Choices": [
         {
           "And": [
-            { "Variable": "$.replacement", "IsPresent": true },
-            { "Variable": "$.replacement", "IsNull": false }
+            {
+              "Variable": "$.replacement",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.replacement",
+              "IsNull": false
+            }
           ],
           "Next": "WrapReplacement"
         }
@@ -237,7 +331,12 @@
       "TimeoutSeconds": 150,
       "Retry": [
         {
-          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
           "IntervalSeconds": 2,
           "MaxAttempts": 3,
           "BackoffRate": 2

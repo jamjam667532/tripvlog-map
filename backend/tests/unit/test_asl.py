@@ -109,6 +109,13 @@ def test_map_runs_one_video_at_a_time_until_global_rate_limit_exists() -> None:
     assert ASL["States"]["AnalyzeVideos"]["MaxConcurrency"] == 1
 
 
+def test_collect_failure_still_finishes_the_job() -> None:
+    # 고른 영상이 없으면 aggregate가 작업을 FAILED로 끝낸다. 조회가 진행 중에 멈추지 않는다
+    catch = ASL["States"]["Collect"]["Catch"][0]
+    assert catch["Next"] == "Aggregate"
+    assert catch["ResultPath"] is None  # jobId가 담긴 입력을 그대로 넘긴다
+
+
 def test_inline_map_and_replacement_loop() -> None:
     assert ASL["States"]["AnalyzeVideos"]["ItemProcessor"]["ProcessorConfig"]["Mode"] == "INLINE"
     assert ASL["States"]["WrapReplacement"]["Next"] == "AnalyzeVideos"

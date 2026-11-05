@@ -2,7 +2,7 @@
 
 > 상태: **초안** (C1~C3 코드 완료, 콘솔 작업 전) · 기준일 2026-11-05 · 근거: 결정 0007(계정 제약), 0008(실시간 분석), implementation-spec §2·§4·§11
 > 대상: 배포를 맡는 사람(남현우)과 코드를 고치는 에이전트. 값이 사람 확인이 필요한 곳은 **[확인]**으로 표시했다.
-> **결정 0009(2026-11-05): 프론트는 EC2 nginx로 바꿨다.** 실제 콘솔 순서는 `docs/setup-ec2-lambda.md`를 따른다.
+> 실제 콘솔 순서는 `docs/setup-backend.md`를 따른다(백엔드 먼저, 프론트는 그다음).
 > 이 문서는 명세다. 리소스는 사람이 콘솔에서 직접 만든다(결정 0007-5). `infra/deploy/`의 CloudShell 스크립트는 보관만 한다.
 
 ## 1. 목표와 현재 상태
@@ -51,12 +51,13 @@
 
 모든 키는 문자열이다. TTL은 보조 수단이고 만료 삭제는 cleanup이 한다. 정의의 원본은 `backend/shared/repos/tables.py`다.
 
-### 4.2 S3 (2개, 전부 퍼블릭 차단)
+### 4.2 S3 (3개, 전부 퍼블릭 차단)
 
 | 버킷 | 용도 | 비고 |
 | --- | --- | --- |
+| `sgu-clicktotrip-web` | 정적 프론트 | CloudFront OAC로만 읽음 |
 | `sgu-clicktotrip-data` | 분석·결과 JSON | Lambda(SafeRole)만 접근. 키 규칙은 코드가 정한다(`shared/repos/blobs.py`) |
-| `sgu-clicktotrip-config` | `keys.json` | SSE-S3, SafeRole만 `GetObject`. 데이터 버킷과 분리 |
+| `sgu-clicktotrip-config` | `keys.json` | SSE-S3, SafeRole만 `GetObject`. 웹·데이터 버킷과 분리 |
 
 `keys.json` 형식(키 이름만, **값은 문서·채팅·로그·커밋에 쓰지 않는다**): `gemini`, `youtube`, `places`, `llm_api_key`, `llm_base_url`. 값은 DM으로 받은 것을 사람이 콘솔에서 직접 올린다.
 
@@ -105,14 +106,14 @@
 | `GET /public/jobs/{jobId}` | api_public | 헤더 `x-guest-access-token` |
 
 - 스테이지 스로틀을 켠다(WAF를 못 쓰므로 공개 API 보호는 이것과 일일 카운터뿐이다). **[확인]** rate·burst 값. 제안: rate 5/s, burst 10.
-- 브라우저는 EC2 nginx만 부르므로(같은 출처) CORS는 필요 없다.
+- CORS는 CloudFront로 같은 도메인을 쓰면 필요 없다.
 
-### 4.6 EC2 (프론트, 결정 0009)
+### 4.6 CloudFront
 
-- `sgu-clicktotrip-web` 한 대. nginx가 화면 파일을 내려주고 `/api/`를 API Gateway로 넘긴다. IAM 역할과 서버 키는 없다.
-- 설치는 `infra/ec2/user-data.sh`, 화면 배포와 API 연결은 `infra/ec2/deploy_frontend.sh`.
-- 프론트 빌드에 `VITE_API_BASE=/api`가 들어간다. 빠지면 **가짜 API로 동작한다**(`frontend/src/api.ts`). 지도 키는 `frontend/.env.local`의 `VITE_GOOGLE_MAPS_API_KEY`이고, 리퍼러 제한을 `http://<IP>/*`로 둔다.
-- HTTP만 된다. Google 로그인(M8) 전에 HTTPS 방법을 정해야 한다.
+- 기본 동작: S3(`sgu-clicktotrip-web`, OAC). SPA라서 403/404를 `/index.html`로 돌린다.
+- `/api/*` 동작: API Gateway 오리진, **캐시 끔**, 헤더 `x-guest-access-token`을 오리진에 전달, 경로 접두사 `/api`를 떼고 넘긴다(또는 API 쪽 경로를 맞춘다).
+- WAF는 끈다. HTTPS 인증서는 CloudFront 기본 도메인을 쓴다.
+- **프론트 빌드 환경 변수(남현우 확인):** `VITE_API_BASE`가 없으면 프론트는 **가짜 API로 동작한다**(`frontend/src/api.ts`). 배포 빌드에는 반드시 넣는다. `VITE_GOOGLE_MAPS_API_KEY`(도메인 제한)와 `VITE_GOOGLE_MAPS_MAP_ID`도 필요하다.
 
 ### 4.7 EventBridge Scheduler·CloudWatch
 
@@ -136,7 +137,7 @@
 - 영상 하나가 끝날 때(REUSE·성공·실패)마다 `aggregate(action=snapshot)`을 부른다. 지도 중간 표시용이고, 실패해도 분석은 멈추지 않는다(`SnapshotSkipped`).
 
 **ASL의 알려진 한계**
-1. **collect가 실패하면 Jobs 상태가 바뀌지 않는다.** 실행은 `CollectFailed`로 끝나지만 조회는 계속 진행 중으로 보인다. 작업을 FAILED로 바꾸는 동작이 지금 핸들러에 없다. 추가 방법(collect 안에서 처리, 또는 aggregate 동작 추가)은 다음 작업이다.
+1. collect가 실패하면 곧바로 aggregate로 가서 작업을 `FAILED`로 끝낸다. 조회가 진행 중에 멈추지 않는다.
 2. Snapshot은 같은 `live.json`을 쓴다. 로컬 서버는 락으로 막는다. Map 동시성이 1인 지금은 겹치지 않지만, §9-A로 병렬을 켜면 겹칠 수 있다.
 3. Retry는 Lambda 서비스 오류에만 건다. 게이트웨이 `BUDGET_EXCEEDED`·설정 오류는 곧바로 영상 실패로 기록된다(결정 0007-1).
 4. Task 타임아웃은 Lambda 타임아웃보다 조금 길게(observe 930초 등) 잡았다. 실측 후 조정한다.
@@ -146,7 +147,7 @@
 배포 담당 1명이 순서대로 한다. 각 단계 끝의 **확인**을 통과한 뒤 다음으로 간다. 리소스를 만든 직후 약 5초는 기다린다.
 
 - [ ] **0. 사전 확인:** 콘솔 리전이 서울인지, `SafeRole-sgu-clicktotrip`이 보이는지. **확인:** 역할 ARN을 메모한다.
-- [ ] **1. S3 버킷 2개** (§4.2, 퍼블릭 차단). **확인:** 두 버킷 모두 퍼블릭 액세스 차단 상태.
+- [ ] **1. S3 버킷 3개** (§4.2, 퍼블릭 차단). **확인:** 세 버킷 모두 퍼블릭 액세스 차단 상태.
 - [ ] **2. `keys.json` 업로드** (설정 버킷). 값은 화면 공유·캡처에 보이지 않게 한다. **확인:** 객체가 있고, 버킷 정책이 SafeRole만 허용.
 - [ ] **3. DynamoDB 6개** (§4.1, 온디맨드, TTL 2개). **확인:** GSI 이름과 TTL 속성 이름이 표와 같다.
 - [ ] **4. zip 만들기:** 저장소 루트에서 `bash infra/deploy/build_zip.sh`(uv 필요) → `dist/backend.zip`. **측정값(2026-11-05): zip 10MB, 풀린 크기 36MB**로 한도(50MB·250MB) 안이다. 콘솔 업로드 한도를 넘지 않으면 직접 올리고, 넘으면 S3에 올려 그 경로로 지정한다. 리눅스용 바이너리로 받으므로 맥에서 직접 실행해 볼 수는 없다.
@@ -154,13 +155,13 @@
 - [ ] **6. 함수 단독 테스트:** claim·collect를 콘솔의 테스트 이벤트로 실행한다(fixture 목적지). **확인:** 오류 없이 JSON을 돌려주고, 로그에 키가 없다. 이때 **Lambda(서울)에서 게이트웨이로 나가는 연결**을 interpret로 확인한다(0007 TODO).
 - [ ] **7. Step Functions 생성** (§5). **확인:** 콘솔에서 테스트 실행 1회가 끝까지 간다.
 - [ ] **8. API Gateway + 스로틀** (§4.5). api_public에 `STATE_MACHINE_ARN`을 넣는다. **확인:** `POST /public/jobs`가 202와 jobId를 준다.
-- [ ] **9. 프론트 배포** (§4.6, `deploy_frontend.sh`에 API 호스트 지정). **확인:** `http://<IP>`에서 화면이 열리고 `/api` 요청이 성공한다.
+- [ ] **9. 프론트 빌드·업로드, CloudFront** (§4.6). **확인:** 배포 도메인에서 화면이 열리고 `/api` 요청이 성공한다.
 - [ ] **10. 스모크 테스트** (§7).
 - [ ] **11. Scheduler** (cleanup 구현 뒤).
 
 ## 7. 완료 조건 (스모크 테스트)
 
-1. `http://<EC2 IP>`에서 도시를 입력하면 jobId가 나오고, 조회가 `QUEUED → RUNNING → SUCCEEDED/PARTIAL`로 바뀐다.
+1. 배포 도메인에서 도시를 입력하면 jobId가 나오고, 조회가 `QUEUED → RUNNING → SUCCEEDED/PARTIAL`로 바뀐다.
 2. 지도에 핀이 나오고, 같은 요청을 다시 보내면 새 작업이 아니라 기존 작업이 돌아온다(requestId).
 3. 같은 도시를 두 번째 요청하면 이미 분석한 영상은 **분석을 건너뛴다**(Gemini·게이트웨이 호출 수가 줄어든다. 영상별 토큰은 `VideoAnalysis`에 기록돼 있다).
 4. CloudWatch 로그에 키·토큰·좌표·Places 원문이 없다.
@@ -183,7 +184,7 @@
 
 첫 배포는 A1로 시작하고, 동작을 확인한 뒤 A2로 바꾸는 순서를 제안한다.
 
-**B. 프론트 호스팅.** 결정 0009로 EC2에 확정했다. 학교 계정에서 EC2를 만들 수 있는지는 첫 작업에서 확인한다.
+**B. 프론트 호스팅.** S3 + CloudFront로 간다. EC2안(결정 0009)은 철회했다. 화면 파일만 정적이고 데이터는 `/api` 뒤 Lambda가 준다. 계정 허용 목록에서 HTTPS 호스팅은 이것뿐이다.
 
 **C. 값:** `ANALYSIS_VERSION`(C7), API 스로틀(§4.5), 로그 보존 기간(§4.7), Gemini 하루 상한(C5).
 

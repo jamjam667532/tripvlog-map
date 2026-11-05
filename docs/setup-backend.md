@@ -1,32 +1,10 @@
-# EC2·Lambda 콘솔 세팅 안내
+# AWS 백엔드 콘솔 세팅 안내
 
-> 순서대로 하면 된다. 콘솔 리전은 **서울(ap-northeast-2)**, 이름은 모두 `sgu-clicktotrip-`로 시작한다. 근거: 결정 0007, 0009.
-> 전체 명세는 `docs/deploy-runbook.md`. 저장소 루트는 브랜치 `feature/aws-first-deploy`.
+> 순서대로 하면 된다. 콘솔 리전은 **서울(ap-northeast-2)**, 이름은 모두 `sgu-clicktotrip-`로 시작한다. 근거: 결정 0007.
+> 전체 명세는 `docs/deploy-runbook.md`. 명령은 브랜치 `feature/aws-first-deploy`의 저장소 루트에서 실행한다.
+> 프론트(S3 + CloudFront)는 백엔드 시험이 끝난 뒤에 한다.
 
-## 1. EC2 (프론트 서버)
-
-**EC2 > 인스턴스 시작**
-
-| 항목 | 값 |
-| --- | --- |
-| 이름 | `sgu-clicktotrip-web` |
-| AMI | Amazon Linux 2023 (64비트 x86) |
-| 유형 | `t3.micro` |
-| 키 페어 | 새로 만들기 `sgu-clicktotrip-key`, RSA, `.pem`. 내려받은 파일은 저장소 밖에 두고 `chmod 400` |
-| 네트워크 | 기본 VPC, 공인 IP 자동 할당 **켬** |
-| 보안 그룹 | 새로 만들기 `sgu-clicktotrip-web`. HTTP 80은 모든 곳, SSH 22는 **내 IP** |
-| 스토리지 | 기본값(8GB gp3) |
-| IAM 인스턴스 프로파일 | **없음** |
-| 고급 > 사용자 데이터 | `infra/ec2/user-data.sh` 내용 전체 |
-
-**확인:** 2~3분 뒤 `http://<공인 IP>`에 "EC2 준비 완료"가 보인다.
-
-- **만들기가 거부되면** 여기서 멈춘다. 계정 회신의 허용 목록에 EC2가 없어서 담당자에게 물어야 한다. 오류 문구를 그대로 전달한다.
-- 안 쓸 때는 **중지**한다. 다시 켜면 IP가 바뀐다.
-
-## 2. Lambda를 만들기 전에: 버킷·키·테이블
-
-Lambda 시험 실행에 필요해서 먼저 만든다.
+## 1. 버킷·키·테이블
 
 **S3 버킷 2개** (퍼블릭 액세스 모두 차단, 나머지 기본값): `sgu-clicktotrip-data`, `sgu-clicktotrip-config`
 
@@ -49,7 +27,7 @@ uv run python scripts/make_keys_json.py /Users/m2/y4s2prjct/experiments/.env
 | `sgu-clicktotrip-coord-cache` | `placeId` | - | TTL 속성 `expiresAt` |
 | `sgu-clicktotrip-users` | `userId` | - | - |
 
-## 3. Lambda 8개
+## 2. Lambda 8개
 
 zip 만들기: `bash infra/deploy/build_zip.sh` → `dist/backend.zip` (약 10MB, 콘솔에서 바로 올릴 수 있다).
 
@@ -102,7 +80,7 @@ for f in collect claim observe interpret match aggregate cleanup; do
 done
 ```
 
-## 4. Lambda 시험 실행
+## 3. Lambda 시험 실행
 
 유료 API를 부르지 않는 시험이다. 콘솔의 **테스트** 탭에 이벤트를 넣고 실행한다.
 
@@ -124,9 +102,61 @@ done
 
 **확인 후:** CloudWatch 로그에 키 값이 보이지 않는지 본다.
 
-## 5. 다음 단계
+## 4. Step Functions
 
-Step Functions(`infra/asl/analyze.asl.json`) → API Gateway → `infra/ec2/deploy_frontend.sh`로 화면 연결. `docs/deploy-runbook.md` §5~§7.
+정의 파일의 `${account}`를 계정 번호(콘솔 오른쪽 위 12자리)로 바꿔 클립보드에 복사한다.
+
+```bash
+sed 's/${account}/123456789012/g' infra/asl/analyze.asl.json | pbcopy
+```
+
+**상태 머신 생성 > 코드로 작성**에 붙여 넣는다. 이름 `sgu-clicktotrip-analyze`, 유형 **Standard**, 실행 역할 **기존 역할** `SafeRole-sgu-clicktotrip`.
+
+만든 뒤 ARN을 복사해 `sgu-clicktotrip-api-public`의 `STATE_MACHINE_ARN`을 **진짜 값으로 바꾼다.**
+
+**확인:** 저장이 된다. 역할 권한 오류가 나면 오류 문구를 담당자에게 전달한다. 실행 시험은 6번에서 한다.
+
+## 5. API Gateway
+
+**API 생성 > HTTP API**. 이름 `sgu-clicktotrip-api`, 통합은 Lambda `sgu-clicktotrip-api-public`(페이로드 형식 **2.0**).
+
+| 메서드 | 경로 |
+| --- | --- |
+| POST | `/public/jobs` |
+| GET | `/public/jobs/{jobId}` |
+
+스테이지는 `$default`, 자동 배포 켬. 만든 뒤 **스로틀링**을 켠다(제안: 속도 5, 버스트 10). 공개 API를 막는 장치가 이것뿐이다. 호출 URL을 복사해 둔다.
+
+**확인:** 아래가 404를 돌려준다. 500이나 403이면 Lambda 호출 권한을 본다.
+
+```bash
+API=https://<api-id>.execute-api.ap-northeast-2.amazonaws.com
+curl -i "$API/public/jobs/00000000-0000-4000-8000-000000000000" -H 'x-guest-access-token: test'
+```
+
+## 6. 전체 시험 (실제 API 호출)
+
+**여기서부터 실제 키를 쓴다.** YouTube·Gemini·Places·게이트웨이 한도를 소모하므로 한 건씩 한다. 영상을 한 줄로 처리해서(Map 동시성 1) 끝까지 **10분 안팎**을 예상한다(추정, 첫 실행으로 잰다).
+
+```bash
+curl -s -X POST "$API/public/jobs" -H 'content-type: application/json' \
+  -d "{\"requestId\": \"$(uuidgen | tr A-Z a-z)\", \"destination\": \"오사카\"}"
+```
+
+202와 함께 `jobId`, `guestAccessToken`이 온다. 토큰은 이때 한 번만 나온다.
+
+```bash
+curl -s "$API/public/jobs/<jobId>" -H 'x-guest-access-token: <토큰>'
+```
+
+**통과:** `status`가 `QUEUED → RUNNING → SUCCEEDED` 또는 `PARTIAL`로 바뀌고 결과에 장소가 있다. Step Functions 콘솔의 실행 그래프에서 단계별 성공을 본다. 이때 처음으로 확인되는 것을 기록한다.
+
+- [ ] Lambda(서울)에서 학교 게이트웨이로 나가는 연결 (interpret 단계)
+- [ ] 영상별 소요 시간, 제한 시간(observe 15분) 안에 드는지
+- [ ] 같은 도시를 다시 요청했을 때 분석을 건너뛰는지(REUSE)
+- [ ] CloudWatch 로그에 키·토큰·좌표·Places 원문이 없는지
+
+**실패하면:** 실행 그래프에서 빨간 단계를 눌러 오류 이름과 그 함수의 CloudWatch 로그를 확인한다.
 
 ## 막히면 전달할 것
 
