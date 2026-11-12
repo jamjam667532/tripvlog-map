@@ -30,7 +30,13 @@ while read -r name timeout mem; do
         --memory-size "$mem" --zip-file "fileb://$ZIP" --query State --output text; then
       echo "  ✗ $fn 생성 실패 (위 오류 문구를 그대로 전달)"; fail=$((fail+1)); continue
     fi
-    aws lambda wait function-active-v2 --function-name "$fn"
+    # 학교 계정은 만든 직후 몇 초 뒤에 태그를 자동으로 붙이고, 태그가 없는 리소스는 거부한다.
+    # 바로 조회하면 AccessDenied가 나므로 태그가 붙을 때까지 기다린다(2026-11-12 첫 실행에서 확인).
+    sleep 15
+    for _ in 1 2 3 4 5 6; do
+      aws lambda wait function-active-v2 --function-name "$fn" 2>/dev/null && break
+      sleep 10
+    done
   fi
   if aws lambda update-function-configuration --function-name "$fn" --environment "$env" \
       --query LastUpdateStatus --output text >/dev/null; then
