@@ -29,6 +29,8 @@ uv run python scripts/make_keys_json.py /Users/m2/y4s2prjct/experiments/.env
 
 ## 2. Lambda 8개
 
+> **빠른 방법(CloudShell):** 콘솔 위쪽의 CloudShell 아이콘 → **작업 > 파일 업로드**로 `backend.zip`과 `infra/deploy/create_functions.sh`를 올리고 `bash create_functions.sh`. 이미 있는 함수는 건너뛰고 8개 모두에 환경 변수를 넣는다. 아래 콘솔 방법과 결과가 같다.
+
 zip 만들기: `bash infra/deploy/build_zip.sh` → `dist/backend.zip` (약 10MB, 콘솔에서 바로 올릴 수 있다).
 
 **함수 생성 > 새로 작성**. 공통 값: 런타임 **Python 3.12**, 아키텍처 **x86_64**(zip이 이 형식이다), 실행 역할 **기존 역할** `SafeRole-sgu-clicktotrip`.

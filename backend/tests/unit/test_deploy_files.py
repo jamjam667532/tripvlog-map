@@ -78,3 +78,16 @@ def test_lambda_env_file_configures_settings_without_secrets() -> None:
     assert s.dynamodb_endpoint is None
     # 결정 0007: 환경 변수에 비밀값 금지
     assert not [name for name in variables if "API_KEY" in name or "SECRET" in name]
+
+
+def test_cloudshell_script_uses_the_same_env_as_lambda_env_file() -> None:
+    script = (ROOT / "infra/deploy/create_functions.sh").read_text()
+    line = next(x for x in script.splitlines() if x.startswith("ENV_JSON='"))
+    embedded = json.loads(line.removeprefix("ENV_JSON='").removesuffix("'"))
+    assert embedded == json.loads((ROOT / "infra/lambda-env.json").read_text())
+    handlers = {p.parent.name for p in (ROOT / "backend/functions").glob("*/handler.py")}
+    listed = {
+        x.split()[0] for x in script.split("<<'LIST'\n", 1)[1].split("\nLIST", 1)[0].splitlines()
+    }
+    assert listed <= handlers
+    assert handlers - listed == {"api_jobs", "api_me"}  # M8이라 아직 만들지 않는다
