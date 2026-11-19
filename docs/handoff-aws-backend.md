@@ -10,7 +10,7 @@
 | S3 `sgu-clicktotrip-data`, `sgu-clicktotrip-config` | 만듦. config 버킷에 `keys.json` 올림 |
 | DynamoDB 테이블 6개 | 만듦. GSI 2개 ACTIVE, TTL 2개 ENABLED (CloudShell로 확인) |
 | Lambda 8개 | 만듦. 런타임 Python 3.12, 핸들러, 제한 시간, 메모리, 태그, 환경 변수 완료 |
-| Lambda 실제 실행 | **아직 안 해 봄** (아래 2번부터) |
+| Lambda 시험 실행 | **통과** (11/19). api-public 404, collect `JobNotFound`. zip·환경 변수·keys.json·DynamoDB 권한 확인됨. 아래 2번은 다시 할 필요 없다 |
 
 ## 2. Lambda 시험 실행 (유료 API 호출 없음)
 
