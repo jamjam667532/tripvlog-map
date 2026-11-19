@@ -12,12 +12,14 @@ from botocore.exceptions import ClientError
 
 from shared.repos.dynamo import batch_get, from_item, is_conditional_failure, to_item
 from shared.schemas.items import (
+    ChannelTasteCacheItem,
     CoordCacheItem,
     YoutubeQuotaItem,
     YoutubeSearchCacheItem,
     YoutubeVideoCacheItem,
 )
 from shared.schemas.places import GeoPoint
+from shared.schemas.taste import ChannelTasteLabel
 from shared.schemas.youtube import VideoMeta
 
 if TYPE_CHECKING:
@@ -105,6 +107,36 @@ class YoutubeCacheRepo:
             duration_sec=meta.duration_sec,
             privacy_status=meta.privacy_status,
             published_at=meta.published_at,
+            expires_at=now + ttl_days * DAY_SEC,
+        )
+        self._table.put_item(Item=to_item(item))
+
+    def get_channel_tastes(
+        self, channel_ids: Collection[str], *, version: str, now: int
+    ) -> dict[str, ChannelTasteLabel]:
+        """채널 라벨 캐시(결정 0010). 만료됐거나 라벨 버전이 다르면 없는 것으로 본다."""
+        if not channel_ids:
+            return {}
+        keys = [{"pk": f"CHANNEL#{c}", "sk": "TASTE"} for c in sorted(set(channel_ids))]
+        found: dict[str, ChannelTasteLabel] = {}
+        for raw in batch_get(self._resource, self._table_name, keys):
+            item = ChannelTasteCacheItem.model_validate(raw)
+            if item.expires_at > now and item.label_version == version:
+                channel_id = item.pk.removeprefix("CHANNEL#")
+                found[channel_id] = ChannelTasteLabel(
+                    channel_id=channel_id, travel=item.travel, styles=item.styles
+                )
+        return found
+
+    def put_channel_taste(
+        self, label: ChannelTasteLabel, *, version: str, now: int, ttl_days: int
+    ) -> None:
+        # 근거 문장(채널 설명 원문)은 저장하지 않는다
+        item = ChannelTasteCacheItem(
+            pk=f"CHANNEL#{label.channel_id}",
+            travel=label.travel,
+            styles=label.styles,
+            label_version=version,
             expires_at=now + ttl_days * DAY_SEC,
         )
         self._table.put_item(Item=to_item(item))

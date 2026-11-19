@@ -6,10 +6,12 @@ from datetime import timedelta
 from functions.collect.handler import Deps, run
 from shared.repos import Repos
 from shared.schemas.events import JobInput
+from shared.schemas.items import UserItem, UserPreferences
+from shared.schemas.taste import ChannelVideo
 from shared.schemas.youtube import VideoMeta
 from shared.settings import Settings
 from tests.fakes import FakeYouTube
-from tests.integration.factories import NOW, guest_job
+from tests.integration.factories import NOW, NOW_EPOCH, VERSION, guest_job
 
 
 def meta(vid: str, ch: str, *, minutes: int = 15, title: str = "오사카 브이로그") -> VideoMeta:
@@ -111,3 +113,70 @@ def test_collect_with_no_results_leaves_empty_refs(repos: Repos, settings: Setti
     out = run(JobInput(job_id=job.job_id), _deps(repos, settings, FakeYouTube({}, [])))
     assert out.video_refs == []
     assert repos.jobs.require(str(job.job_id)).progress.total == 0
+
+
+# ---------- 로그인 작업: 개인 채널 영상 (결정 0010) ----------
+
+USER = "google:u1"
+PERSONAL = [meta("p1", "pc1", title="오사카 3박 4일"), meta("p2", "pc2", title="오사카 야경")]
+UPLOADS = {
+    "pc1": [ChannelVideo(video_id="p1", channel_id="pc1", title="오사카 3박 4일")],
+    "pc2": [
+        ChannelVideo(video_id="x9", channel_id="pc2", title="도쿄 브이로그"),  # 다른 도시
+        ChannelVideo(video_id="p2", channel_id="pc2", title="오사카 야경"),
+    ],
+}
+
+
+def _analyzed(repos: Repos, video: str, channel: str) -> None:
+    va = repos.video_analysis
+    va.claim(video, VERSION, channel_id=channel, job_id="old", now=NOW_EPOCH, lease_sec=900)
+    va.record_step(
+        video,
+        VERSION,
+        job_id="old",
+        now=NOW_EPOCH,
+        lease_sec=900,
+        observation_s3_key="o",
+        interpretation_s3_key="i",
+    )
+    va.mark_done(video, VERSION, job_id="old", now=NOW)
+
+
+def _user_job(repos: Repos) -> str:
+    job = guest_job(guestAccessHash=None, userId=USER)
+    repos.jobs.create(job)
+    repos.users.put(
+        UserItem(user_id=USER, preferences=UserPreferences(reference_channel_ids=["pc1", "pc2"]))
+    )
+    return str(job.job_id)
+
+
+def test_login_job_puts_already_analyzed_personal_videos_first(
+    repos: Repos, settings: Settings
+) -> None:
+    _analyzed(repos, "p1", "pc1")
+    _analyzed(repos, "p2", "pc2")
+    job_id = _user_job(repos)
+    youtube = FakeYouTube(SEARCH, METAS + PERSONAL, uploads=UPLOADS)
+    out = run(JobInput.model_validate({"jobId": job_id}), _deps(repos, settings, youtube))
+    ids = [r.video_id for r in out.video_refs]
+    assert ids[:2] == ["p1", "p2"] and len(ids) == settings.max_videos_per_job
+    assert youtube.upload_calls == ["pc1", "pc2"]
+
+
+def test_personal_videos_not_yet_analyzed_are_not_added(repos: Repos, settings: Settings) -> None:
+    _analyzed(repos, "p2", "pc2")  # p1은 분석된 적 없다 → 새로 분석하지 않으므로 넣지 않는다
+    job_id = _user_job(repos)
+    youtube = FakeYouTube(SEARCH, METAS + PERSONAL, uploads=UPLOADS)
+    out = run(JobInput.model_validate({"jobId": job_id}), _deps(repos, settings, youtube))
+    ids = [r.video_id for r in out.video_refs]
+    assert ids[0] == "p2" and "p1" not in ids
+
+
+def test_guest_job_does_not_look_at_personal_channels(repos: Repos, settings: Settings) -> None:
+    job = guest_job()
+    repos.jobs.create(job)
+    youtube = FakeYouTube(SEARCH, METAS, uploads=UPLOADS)
+    run(JobInput(job_id=job.job_id), _deps(repos, settings, youtube))
+    assert youtube.upload_calls == []

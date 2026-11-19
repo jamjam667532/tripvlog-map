@@ -49,11 +49,16 @@ def _norm(text: str) -> str:
     return unicodedata.normalize("NFKC", text).casefold()
 
 
+def text_mentions_destination(text: str, destination: str) -> bool:
+    """글에 목적지 표기(별칭 포함)가 있는가."""
+    names = DESTINATION_ALIASES.get(destination.strip(), (destination.strip(),))
+    normalized = _norm(text)
+    return any(_norm(n) in normalized for n in names if n)
+
+
 def mentions_destination(meta: VideoMeta, destination: str) -> bool:
     """제목 또는 설명란에 목적지 표기(별칭 포함)가 있는가."""
-    names = DESTINATION_ALIASES.get(destination.strip(), (destination.strip(),))
-    text = _norm(f"{meta.title}\n{meta.description}")
-    return any(_norm(n) in text for n in names if n)
+    return text_mentions_destination(f"{meta.title}\n{meta.description}", destination)
 
 
 def eligible(meta: VideoMeta, now: datetime, destination: str | None = None) -> bool:

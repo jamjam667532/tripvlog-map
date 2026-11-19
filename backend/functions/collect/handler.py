@@ -2,6 +2,10 @@
 
 입력 {jobId} → 출력 {jobId, videoRefs:[{jobId, videoId, channelId, analysisVersion}]}
 YouTube 검색 결과·메타데이터는 YoutubeCache(25일)를 먼저 본다. 조회수 등 지표는 쓰지 않는다.
+
+로그인 작업이면(결정 0010) 사용자가 확인한 참고 채널의 이 도시 영상 중
+**이미 분석된 영상만** 최대 2개를 앞에 넣는다. 개인 영상 때문에 새로 분석하지 않는다(비용 원칙).
+게스트 작업은 그대로다.
 """
 
 import unicodedata
@@ -14,7 +18,8 @@ from typing import Any
 from shared.clients.secrets import SECRET_YOUTUBE, get_secret
 from shared.clients.youtube import SearchOrder, YouTubeClient, YouTubeDataApi
 from shared.repos import Repos, search_hash, with_metrics, with_refs
-from shared.rules.selection import merge_round_robin, select_videos
+from shared.rules.selection import eligible, merge_round_robin, select_videos
+from shared.rules.taste import destination_uploads, personal_first
 from shared.schemas.events import CollectOutput, JobInput, VideoTask
 from shared.schemas.items import JobItem, SpareVideo, VideoRef
 from shared.schemas.youtube import VideoMeta
@@ -27,6 +32,7 @@ SEARCH_PLAN: tuple[tuple[str, SearchOrder], ...] = (
     ("{dest} 여행", "date"),
 )
 MAX_RESULTS = 25
+MAX_PERSONAL_CHANNELS = 5  # 업로드 목록 조회 상한(채널당 1 unit)
 SEARCH_YEARS = 2
 
 
@@ -82,6 +88,26 @@ def _metas(deps: Deps, video_ids: list[str], now: int) -> dict[str, VideoMeta]:
     return found
 
 
+def _personal_videos(
+    deps: Deps, user_id: str, destination: str, now_dt: datetime, now: int
+) -> list[VideoMeta]:
+    """사용자가 확인한 채널의 이 도시 영상 중 이미 분석된(DONE) 영상만, 채널 순서대로."""
+    user = deps.repos.users.get(user_id)
+    if user is None:
+        return []
+    version = deps.settings.analysis_version
+    analyzed: list[str] = []
+    for channel_id in user.preferences.reference_channel_ids[:MAX_PERSONAL_CHANNELS]:
+        for video in destination_uploads(deps.youtube.uploads(channel_id), destination):
+            item = deps.repos.video_analysis.get(video.video_id, version)
+            if item is not None and item.status == "DONE":
+                analyzed.append(video.video_id)
+    if not analyzed:
+        return []
+    metas = _metas(deps, analyzed, now)
+    return [metas[v] for v in analyzed if v in metas and eligible(metas[v], now_dt, destination)]
+
+
 def _output(job: JobItem) -> CollectOutput:
     return CollectOutput(
         job_id=job.job_id,
@@ -122,6 +148,15 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
         max_videos=s.max_videos_per_job,
         max_spares=s.spare_videos_per_job,
     )
+    if job.user_id:
+        personal = _personal_videos(deps, job.user_id, dest, now_dt, now)
+        if personal:
+            picked = personal_first(
+                picked,
+                personal,
+                max_videos=s.max_videos_per_job,
+                max_spares=s.spare_videos_per_job,
+            )
     refs = [
         VideoRef(video_id=m.video_id, channel_id=m.channel_id, analysis_version=s.analysis_version)
         for m in picked.chosen

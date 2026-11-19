@@ -9,6 +9,7 @@ from shared.repos.blobs import BlobStore, analysis_key, live_result_key, result_
 from shared.repos.caches import CoordCacheRepo, YoutubeCacheRepo, search_hash
 from shared.repos.jobs import JobNotFound, JobsRepo, with_metrics, with_ref_state, with_refs
 from shared.repos.places import PlacesRepo
+from shared.repos.users import UsersRepo
 from shared.repos.video_analysis import LeaseLost, VideoAnalysisRepo
 from shared.settings import Settings
 
@@ -24,6 +25,7 @@ __all__ = [
     "LeaseLost",
     "PlacesRepo",
     "Repos",
+    "UsersRepo",
     "VideoAnalysisRepo",
     "YoutubeCacheRepo",
     "analysis_key",
@@ -44,6 +46,7 @@ class Repos:
     coords: CoordCacheRepo
     youtube_cache: YoutubeCacheRepo
     blobs: BlobStore
+    users: UsersRepo
 
     @classmethod
     def from_settings(
@@ -67,4 +70,5 @@ class Repos:
             coords=CoordCacheRepo(dynamodb, s.coord_cache_table),
             youtube_cache=YoutubeCacheRepo(dynamodb, s.youtube_cache_table),
             blobs=BlobStore(s3, s.bucket),
+            users=UsersRepo(dynamodb.Table(s.users_table)),
         )
