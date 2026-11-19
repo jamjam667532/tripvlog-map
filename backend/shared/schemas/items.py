@@ -18,6 +18,7 @@ from shared.schemas.common import (
     Ratings,
     Style,
     TimeEvidence,
+    TravelLabel,
     VideoId,
     VideoTimeRange,
     VisitStatus,
@@ -210,6 +211,21 @@ class YoutubeSearchCacheItem(CamelModel):
     expires_at: EpochSeconds
 
 
+class ChannelTasteCacheItem(CamelModel):
+    """pk = CHANNEL#{channelId}, sk = TASTE. 공개 채널의 취향 라벨 캐시(결정 0010).
+
+    누가 구독했는지는 담지 않는다(사용자별 정보는 Users에만). 채널 이름·설명도 저장하지 않는다.
+    같은 채널을 구독한 사람이 많아도 Bedrock은 채널당 한 번만 부른다.
+    """
+
+    pk: Annotated[str, Field(pattern=r"^CHANNEL#[A-Za-z0-9_-]{1,64}$")]
+    sk: Literal["TASTE"] = "TASTE"
+    travel: TravelLabel
+    styles: Annotated[list[Style], Field(max_length=2)] = Field(default_factory=list)
+    label_version: NonEmptyStr
+    expires_at: EpochSeconds
+
+
 class YoutubeVideoCacheItem(CamelModel):
     """pk = VIDEO#{videoId}, sk = META. 저장 필드는 결정 0002-3.
 
@@ -257,6 +273,6 @@ class YoutubeLink(CamelModel):
 
 
 class UserItem(CamelModel):
-    user_id: NonEmptyStr  # Cognito sub
+    user_id: NonEmptyStr  # google:<Google ID 토큰 sub> (결정 0007-2)
     preferences: UserPreferences = Field(default_factory=UserPreferences)
     youtube: YoutubeLink | None = None

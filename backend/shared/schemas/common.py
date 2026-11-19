@@ -10,6 +10,8 @@ Style = Literal["맛집", "카페·포토스팟", "관광·역사", "쇼핑", "�
 Companion = Literal["혼자", "커플", "친구", "가족"]
 Category = Literal["RESTAURANT", "CAFE", "ATTRACTION", "OTHER"]
 VisitStatus = Literal["VISITED", "MENTIONED", "UNCLEAR"]
+# 채널이 여행 채널인가 (결정 0010). 근거가 없으면 UNKNOWN
+TravelLabel = Literal["YES", "NO", "UNKNOWN"]
 MatchStatus = Literal["CONFIRMED", "UNCONFIRMED"]
 ClueType = Literal["SPEECH", "SCREEN_TEXT", "SCENE"]
 RatingValue = Literal["POSITIVE", "NEGATIVE", "MIXED", "NONE", "UNDETERMINED"]
