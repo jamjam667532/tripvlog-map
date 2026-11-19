@@ -126,14 +126,13 @@ class BedrockConverseInterpreter:
         raise InvalidModelOutput("bedrock", MAX_ATTEMPTS)
 
 
-class GatewayChatInterpreter:
-    """학교 LLM 게이트웨이(OpenAI 호환 chat.completions)로 Bedrock 모델을 부른다 (결정 0007-1).
+class GatewayChat:
+    """학교 LLM 게이트웨이(OpenAI 호환 chat.completions) 한 번 호출 (결정 0007-1).
 
-    모델은 별칭으로만 부른다(예: bedrock-haiku). 키·주소는 호출하는 쪽이 설정에서 읽어 넘긴다.
+    해석(GatewayChatInterpreter)과 취향 라벨(clients/taste.py)이 같이 쓴다.
     - 'Budget has been exceeded' → 재시도 없이 BUDGET_EXCEEDED
-    - 429 → 지수 백오프 최대 3회 (형식 검증 재요청과 따로 센다)
+    - 429 → 지수 백오프 최대 3회
     - 그 밖의 4xx·5xx → 재시도 없이 실패
-    TODO(verify): response_format json_schema가 게이트웨이를 거쳐 적용되는지. 확인 전에는 끈다.
     """
 
     RATE_LIMIT_RETRIES = 3
@@ -149,29 +148,22 @@ class GatewayChatInterpreter:
         max_tokens: int = 4096,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
-        self._model = model
+        self.model = model
         self._api_key = api_key
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._transport = transport
         self._timeout = timeout_sec
         self._max_tokens = max_tokens
         self._sleep = sleep
-        # 게이트웨이는 구조화 출력 강제를 아직 확인하지 못했으므로 스키마를 프롬프트로 준다
-        schema = json.dumps(ai_json_schema(InterpretationResult), ensure_ascii=False)
-        self._system = (
-            load_prompt("interpret")
-            + "\n\n## 출력 JSON 스키마 (반드시 이 형식 그대로, JSON 하나만 출력)\n"
-            + schema
-        )
 
     def __repr__(self) -> str:
-        return f"GatewayChatInterpreter(model={self._model!r})"
+        return f"GatewayChat(model={self.model!r})"
 
-    def _call(self, user_text: str) -> dict[str, Any]:
+    def complete(self, system: str, user_text: str) -> dict[str, Any]:
         body = {
-            "model": self._model,
+            "model": self.model,
             "messages": [
-                {"role": "system", "content": self._system},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user_text},
             ],
             "temperature": 0.0,
@@ -200,6 +192,55 @@ class GatewayChatInterpreter:
                 raise ExternalApiError("llm-gateway", resp.status, "unexpected body")
             return data
         raise ExternalApiError("llm-gateway", 429)
+
+
+def message_text(data: dict[str, Any]) -> str:
+    """chat.completions 응답의 본문. 코드 울타리(```)는 벗긴다."""
+    return _strip_code_fence(data["choices"][0]["message"]["content"] or "")
+
+
+class GatewayChatInterpreter:
+    """학교 LLM 게이트웨이로 Bedrock 모델을 불러 해석한다 (결정 0007-1).
+
+    모델은 별칭으로만 부른다(예: bedrock-haiku). 키·주소는 호출하는 쪽이 설정에서 읽어 넘긴다.
+    오류 처리는 GatewayChat. 형식 검증 실패는 1회 재요청(429 재시도와 따로 센다).
+    TODO(verify): response_format json_schema가 게이트웨이를 거쳐 적용되는지. 확인 전에는 끈다.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        *,
+        api_key: str,
+        base_url: str,
+        transport: Transport = urllib_transport,
+        timeout_sec: float = 120.0,
+        max_tokens: int = 4096,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._model = model
+        self._chat = GatewayChat(
+            model,
+            api_key=api_key,
+            base_url=base_url,
+            transport=transport,
+            timeout_sec=timeout_sec,
+            max_tokens=max_tokens,
+            sleep=sleep,
+        )
+        # 게이트웨이는 구조화 출력 강제를 아직 확인하지 못했으므로 스키마를 프롬프트로 준다
+        schema = json.dumps(ai_json_schema(InterpretationResult), ensure_ascii=False)
+        self._system = (
+            load_prompt("interpret")
+            + "\n\n## 출력 JSON 스키마 (반드시 이 형식 그대로, JSON 하나만 출력)\n"
+            + schema
+        )
+
+    def __repr__(self) -> str:
+        return f"GatewayChatInterpreter(model={self._model!r})"
+
+    def _call(self, user_text: str) -> dict[str, Any]:
+        return self._chat.complete(self._system, user_text)
 
     def interpret(self, observation: ObservationResult, analysis_version: str) -> Interpretation:
         user_text = observation_prompt(observation, analysis_version)

@@ -7,18 +7,29 @@ from shared.clients.bedrock import Interpretation
 from shared.clients.errors import ExternalApiError, InvalidModelOutput
 from shared.clients.gemini import Observation
 from shared.clients.places import MAX_CALLS_PER_CANDIDATE
-from shared.clients.youtube import SEARCH_UNITS, VIDEOS_UNITS, SearchOrder
+from shared.clients.youtube import LIST_UNITS, SEARCH_UNITS, VIDEOS_UNITS, SearchOrder
 from shared.schemas.interpretation import InterpretationResult, link_to_observation
 from shared.schemas.observation import ObservationResult
 from shared.schemas.places import GeoPoint, PlaceHit
+from shared.schemas.taste import ChannelInfo, ChannelTasteLabel, ChannelVideo
 from shared.schemas.youtube import VideoMeta
 
 
 class FakeYouTube:
-    def __init__(self, search: Mapping[str, Sequence[str]], metas: Sequence[VideoMeta]) -> None:
+    def __init__(
+        self,
+        search: Mapping[str, Sequence[str]],
+        metas: Sequence[VideoMeta],
+        *,
+        channels: Sequence[ChannelInfo] = (),
+        uploads: Mapping[str, Sequence[ChannelVideo]] | None = None,
+    ) -> None:
         self._search = search
         self._metas = {m.video_id: m for m in metas}
+        self._channels = {c.channel_id: c for c in channels}
+        self._uploads = uploads or {}
         self.search_calls: list[tuple[str, SearchOrder]] = []
+        self.upload_calls: list[str] = []
         self.units_used = 0
 
     def search(
@@ -31,6 +42,60 @@ class FakeYouTube:
     def videos(self, video_ids: Sequence[str]) -> list[VideoMeta]:
         self.units_used += VIDEOS_UNITS
         return [self._metas[v] for v in dict.fromkeys(video_ids) if v in self._metas]
+
+    def channels(self, channel_ids: Sequence[str]) -> list[ChannelInfo]:
+        self.units_used += LIST_UNITS
+        return [self._channels[c] for c in dict.fromkeys(channel_ids) if c in self._channels]
+
+    def uploads(self, channel_id: str, max_results: int = 50) -> list[ChannelVideo]:
+        self.upload_calls.append(channel_id)
+        self.units_used += LIST_UNITS
+        return list(self._uploads.get(channel_id, []))[:max_results]
+
+
+class FakeYouTubeUser:
+    """사용자 토큰으로 읽는 구독·좋아요. reject=True면 Google이 토큰을 거부한 것처럼 401."""
+
+    def __init__(
+        self,
+        subscriptions: Sequence[str] = (),
+        liked: Sequence[ChannelVideo] = (),
+        *,
+        reject: bool = False,
+    ) -> None:
+        self._subscriptions = list(subscriptions)
+        self._liked = list(liked)
+        self._reject = reject
+        self.tokens: list[str] = []
+
+    def for_token(self, token: str) -> "FakeYouTubeUser":
+        self.tokens.append(token)
+        return self
+
+    def subscription_channel_ids(self) -> list[str]:
+        if self._reject:
+            raise ExternalApiError("youtube", 401)
+        return list(self._subscriptions)
+
+    def liked_videos(self) -> list[ChannelVideo]:
+        if self._reject:
+            raise ExternalApiError("youtube", 401)
+        return list(self._liked)
+
+
+class FakeTasteLabeler:
+    """채널별 라벨을 돌려준다. fail=True면 게이트웨이 오류처럼 예외."""
+
+    def __init__(self, labels: Mapping[str, ChannelTasteLabel], *, fail: bool = False) -> None:
+        self._labels = labels
+        self._fail = fail
+        self.asked: list[list[str]] = []
+
+    def label(self, channels: Sequence[ChannelInfo]) -> list[ChannelTasteLabel]:
+        self.asked.append([c.channel_id for c in channels])
+        if self._fail:
+            raise ExternalApiError("llm-gateway", 500)
+        return [self._labels[c.channel_id] for c in channels if c.channel_id in self._labels]
 
 
 class FakeGemini:
