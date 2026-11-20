@@ -87,6 +87,15 @@ curl -s "$API/public/jobs/<jobId>" -H 'x-guest-access-token: <토큰>'
 
 ## 6. 알아둘 함정 (실제로 겪은 것)
 
+- **2026-11-20 첫 실행:** 영상 6개 중 4개가 interpret에서 실패, 2개도 후보 0~1개였다. 원인은 학교 게이트웨이의
+  `bedrock-haiku`가 생각(thinking)을 켠 채 응답해 보이지 않는 토큰이 출력 한도를 먼저 쓴 것. 생각을 끄고
+  (`thinking: disabled`) 출력 한도 8,192, 묶음 40개로 고쳤다. 분석 버전을 `v3-seg190`으로 올렸다.
+- **상태 머신을 CLI로 만들면 학교 태그가 자동으로 안 붙는다.** `group=sgu-clicktotrip`, `username=<IAM 사용자>`를
+  직접 붙인다(`aws stepfunctions tag-resource`).
+- **SafeRole에 `states:StartExecution`이 처음엔 없었다.** 2026-11-20 담당자 요청으로 추가됨.
+- **콘솔에서 먼저 만든 함수는 스크립트가 zip을 올리지 않는다.** 8개 모두 `CodeSize`가 약 10MB인지 확인한다:
+  `aws lambda list-functions --query "Functions[?starts_with(FunctionName,'sgu-clicktotrip-')].[FunctionName,CodeSize]" --output table`
+
 - **새로 만든 리소스는 10~20초 뒤에 학교 태그가 자동으로 붙는다.** 그 전에 조회·수정하면 `explicit deny`로 거부된다. 잠시 기다렸다 다시 하면 된다.
 - **콘솔에서 Lambda를 새로 만들면 기본 런타임이 Python 3.15다.** 우리 zip은 3.12 전용이라 반드시 3.12로 고른다.
 - **CloudShell 파일 업로드가 `Too many requests`로 막히면** 1~2분 기다렸다 다시 한다.

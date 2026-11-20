@@ -27,7 +27,8 @@ from shared.schemas.interpretation import InterpretationResult, link_to_observat
 from shared.schemas.observation import ObservationResult
 
 MAX_ATTEMPTS = 2  # 최초 1회 + 재요청 1회
-MIN_SPLIT_CLUES = 40  # 묶음이 실패하면 반으로 나눠 다시 보낸다. 이보다 작으면 나누지 않는다
+GATEWAY_MAX_TOKENS = 8192  # 2026-11-20 확인: 게이트웨이가 8,192까지 받는다
+MIN_SPLIT_CLUES = 20  # 묶음이 실패하면 반으로 나눠 다시 보낸다. 이보다 작으면 나누지 않는다
 
 logger = logging.getLogger(__name__)
 SCHEMA_NAME = "interpretation_result"
@@ -148,6 +149,10 @@ class GatewayChat:
     - 'Budget has been exceeded' → 재시도 없이 BUDGET_EXCEEDED
     - 429 → 지수 백오프 최대 3회
     - 그 밖의 4xx·5xx → 재시도 없이 실패
+    - disable_thinking: 게이트웨이의 bedrock-haiku는 생각(thinking)을 켠 채 응답한다
+      (2026-11-20 확인, 응답에 thinking_blocks). 보이지 않는 생각 토큰이 max_tokens를
+      먼저 써서 JSON이 잘리므로 끈다.
+      끄면 같은 입력에서 출력이 끝까지 나오고 응답도 약 2배 빠르다.
     """
 
     RATE_LIMIT_RETRIES = 3
@@ -160,10 +165,12 @@ class GatewayChat:
         base_url: str,
         transport: Transport = urllib_transport,
         timeout_sec: float = 120.0,
-        max_tokens: int = 4096,
+        max_tokens: int = GATEWAY_MAX_TOKENS,
         sleep: Callable[[float], None] = time.sleep,
+        disable_thinking: bool = True,
     ) -> None:
         self.model = model
+        self._disable_thinking = disable_thinking
         self._api_key = api_key
         self._url = base_url.rstrip("/") + "/chat/completions"
         self._transport = transport
@@ -183,6 +190,7 @@ class GatewayChat:
             ],
             "temperature": 0.0,
             "max_tokens": self._max_tokens,
+            **({"thinking": {"type": "disabled"}} if self._disable_thinking else {}),
         }
         req = HttpRequest(
             "POST",
@@ -230,7 +238,7 @@ class GatewayChatInterpreter:
         base_url: str,
         transport: Transport = urllib_transport,
         timeout_sec: float = 120.0,
-        max_tokens: int = 4096,
+        max_tokens: int = GATEWAY_MAX_TOKENS,
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._model = model
@@ -283,15 +291,19 @@ class GatewayChatInterpreter:
                 TypeError,
             ) as e:
                 # 원인만 남긴다(모델이 쓴 내용은 남기지 않는다)
+                raw_error = data.get("error")
+                gateway_error: dict[str, Any] = raw_error if isinstance(raw_error, dict) else {}
                 logger.warning(
                     "interpret output rejected: attempt=%d error=%s finish=%s clues=%d "
-                    "out_tokens=%s fields=%s",
+                    "out_tokens=%s fields=%s body_keys=%s gateway_error=%s",
                     attempt,
                     type(e).__name__,
                     finish,
                     len(observation.clues),
                     usage.get("completion_tokens"),
                     _error_fields(e),
+                    sorted(data)[:8],
+                    gateway_error.get("type") or gateway_error.get("code"),
                 )
                 if finish == "length":
                     break  # 출력 한도에 잘렸다. 같은 입력을 다시 보내도 또 잘린다 → 나눠서 보낸다
@@ -305,9 +317,10 @@ class GatewayChatInterpreter:
 class ChunkedInterpreter:
     """단서가 많으면 나눠 해석하고 합친다.
 
-    학교 게이트웨이는 출력을 4,096토큰에서 자른다(2026-10-25 확인, finish_reason=length).
-    구간 관찰로 단서가 200~300개가 되면 해석 JSON이 잘려 매번 실패한다. 그래서 단서를
-    max_clues개씩 차례로 나눠 각각 해석하고, clue_refs는 전체 관찰 기준 번호로 되돌린다.
+    구간 관찰로 단서가 200~300개가 되면 해석 JSON이 출력 한도에 잘린다(finish_reason=length).
+    생각을 끈 상태에서 단서 20개의 출력이 약 2천 토큰이었다(2026-11-20). 그래서 단서를
+    max_clues개(기본 40, 약 4천 토큰)씩 나눠 각각 해석하고,
+    clue_refs는 전체 관찰 기준 번호로 되돌린다.
     실패한 묶음은 반으로 나눠 한 번 더 보낸다(min_split개 이하면 나누지 않는다). 출력이 길어
     한도에 잘리는 경우를 막는다. 일부 묶음이 실패해도 나머지로 결과를 만들고, 모두 실패하면 예외.
     묶음 경계에 걸친 장소는 후보가 둘로 나뉠 수 있지만 [2-4] 매칭에서 같은 placeId로 모인다.
@@ -317,7 +330,7 @@ class ChunkedInterpreter:
         self,
         inner: BedrockInterpreter,
         *,
-        max_clues: int = 80,
+        max_clues: int = 40,
         max_workers: int = 4,
         min_split: int = MIN_SPLIT_CLUES,
     ):

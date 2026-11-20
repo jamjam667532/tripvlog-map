@@ -64,7 +64,7 @@ zip 만들기: `bash infra/deploy/build_zip.sh` → `dist/backend.zip` (약 10MB
 | `DATA_BUCKET` | `sgu-clicktotrip-data` |
 | `CONFIG_BUCKET` | `sgu-clicktotrip-config` |
 | `CONFIG_KEY` | `keys.json` |
-| `ANALYSIS_VERSION` | `v2-seg190` |
+| `ANALYSIS_VERSION` | `v3-seg190` |
 | `GEMINI_MODELS` | `gemini-3.5-flash-lite,gemini-3.1-flash-lite` |
 | `BEDROCK_INTERPRETER_MODEL_ID` | `bedrock-haiku` |
 

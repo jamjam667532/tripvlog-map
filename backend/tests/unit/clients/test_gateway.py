@@ -88,3 +88,22 @@ def test_auth_error_is_not_retried() -> None:
     with pytest.raises(ExternalApiError):
         _client(t).interpret(OBS, "v1")
     assert len(t.requests) == 1
+
+
+def test_gateway_request_turns_thinking_off_and_allows_long_output() -> None:
+    """bedrock-haiku는 생각 토큰이 max_tokens를 먼저 써서 JSON이 잘렸다(2026-11-20)."""
+    from shared.clients.bedrock import GATEWAY_MAX_TOKENS, GatewayChat
+    from tests.unit.clients.transport import RecordingTransport
+
+    reply = {"choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}], "usage": {}}
+    t = RecordingTransport(lambda req: (200, reply))
+    GatewayChat("bedrock-haiku", api_key="k", base_url="https://gw", transport=t).complete("s", "u")
+    sent = t.body()
+    assert sent["thinking"] == {"type": "disabled"}
+    assert sent["max_tokens"] == GATEWAY_MAX_TOKENS == 8192
+
+    t2 = RecordingTransport(lambda req: (200, reply))
+    GatewayChat(
+        "other", api_key="k", base_url="https://gw", transport=t2, disable_thinking=False
+    ).complete("s", "u")
+    assert "thinking" not in t2.body()

@@ -349,7 +349,7 @@ def main() -> None:
             youtube=YouTubeDataApi(env["YOUTUBE_API_KEY"]),
             gemini=gemini,
             places=PlacesTextSearch(env["PLACES_API_KEY"]),
-            llm=ChunkedInterpreter(  # 게이트웨이 출력 4,096토큰 한도 → 단서 80개씩
+            llm=ChunkedInterpreter(  # 게이트웨이 출력 한도 → 단서 40개씩 나눠 해석
                 GatewayChatInterpreter(
                     a.llm_model, api_key=env["LLM_API_KEY"], base_url=env["LLM_BASE_URL"]
                 )

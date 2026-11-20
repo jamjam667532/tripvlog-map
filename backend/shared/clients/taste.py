@@ -17,7 +17,7 @@ from shared.clients.prompts import load_prompt
 from shared.schemas.taste import ChannelInfo, ChannelTasteLabel, ChannelTasteLabels
 
 LABEL_VERSION = "taste-v1"  # 프롬프트·스키마가 바뀌면 올린다. 채널 라벨 캐시가 다시 만들어진다
-MAX_CHANNELS_PER_CALL = 30  # 게이트웨이 출력 4,096토큰 안에 들게
+MAX_CHANNELS_PER_CALL = 30  # 게이트웨이 출력 한도(GATEWAY_MAX_TOKENS) 안에 들게
 MAX_DESCRIPTION_CHARS = 300
 
 
