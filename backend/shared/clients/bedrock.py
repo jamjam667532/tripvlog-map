@@ -8,6 +8,7 @@
 """
 
 import json
+import logging
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -26,6 +27,9 @@ from shared.schemas.interpretation import InterpretationResult, link_to_observat
 from shared.schemas.observation import ObservationResult
 
 MAX_ATTEMPTS = 2  # 최초 1회 + 재요청 1회
+MIN_SPLIT_CLUES = 40  # 묶음이 실패하면 반으로 나눠 다시 보낸다. 이보다 작으면 나누지 않는다
+
+logger = logging.getLogger(__name__)
 SCHEMA_NAME = "interpretation_result"
 
 
@@ -50,6 +54,17 @@ def observation_prompt(observation: ObservationResult, analysis_version: str) ->
         "clues": clues,
     }
     return json.dumps(payload, ensure_ascii=False)
+
+
+def _error_fields(error: Exception) -> list[str]:
+    """검증 오류의 필드 위치와 종류만. 모델이 쓴 값(input)은 남기지 않는다."""
+    if not isinstance(error, ValidationError):
+        return []
+    fields = {
+        ".".join(str(p) for p in e["loc"] if not isinstance(p, int)) + ":" + e["type"]
+        for e in error.errors()
+    }
+    return sorted(fields)[:5]
 
 
 def _strip_code_fence(text: str) -> str:
@@ -245,11 +260,15 @@ class GatewayChatInterpreter:
     def interpret(self, observation: ObservationResult, analysis_version: str) -> Interpretation:
         user_text = observation_prompt(observation, analysis_version)
         input_tokens = output_tokens = 0
-        for _ in range(MAX_ATTEMPTS):
+        for attempt in range(1, MAX_ATTEMPTS + 1):
             data = self._call(user_text)
             usage = data.get("usage") or {}
             input_tokens += int(usage.get("prompt_tokens", 0))
             output_tokens += int(usage.get("completion_tokens", 0))
+            choices = data.get("choices")
+            finish = (
+                choices[0].get("finish_reason") if isinstance(choices, list) and choices else None
+            )
             try:
                 text = data["choices"][0]["message"]["content"] or ""
                 parsed_json = json.loads(_strip_code_fence(text))
@@ -262,7 +281,20 @@ class GatewayChatInterpreter:
                 ValidationError,
                 AttributeError,
                 TypeError,
-            ):
+            ) as e:
+                # 원인만 남긴다(모델이 쓴 내용은 남기지 않는다)
+                logger.warning(
+                    "interpret output rejected: attempt=%d error=%s finish=%s clues=%d "
+                    "out_tokens=%s fields=%s",
+                    attempt,
+                    type(e).__name__,
+                    finish,
+                    len(observation.clues),
+                    usage.get("completion_tokens"),
+                    _error_fields(e),
+                )
+                if finish == "length":
+                    break  # 출력 한도에 잘렸다. 같은 입력을 다시 보내도 또 잘린다 → 나눠서 보낸다
                 continue
             return Interpretation(
                 link_to_observation(parsed, observation), input_tokens, output_tokens
@@ -276,41 +308,62 @@ class ChunkedInterpreter:
     학교 게이트웨이는 출력을 4,096토큰에서 자른다(2026-10-25 확인, finish_reason=length).
     구간 관찰로 단서가 200~300개가 되면 해석 JSON이 잘려 매번 실패한다. 그래서 단서를
     max_clues개씩 차례로 나눠 각각 해석하고, clue_refs는 전체 관찰 기준 번호로 되돌린다.
-    일부 묶음이 실패해도 나머지로 결과를 만들고, 모두 실패하면 예외. 묶음 경계에 걸친 장소는
-    후보가 둘로 나뉠 수 있지만 [2-4] 매칭에서 같은 placeId로 모인다.
+    실패한 묶음은 반으로 나눠 한 번 더 보낸다(min_split개 이하면 나누지 않는다). 출력이 길어
+    한도에 잘리는 경우를 막는다. 일부 묶음이 실패해도 나머지로 결과를 만들고, 모두 실패하면 예외.
+    묶음 경계에 걸친 장소는 후보가 둘로 나뉠 수 있지만 [2-4] 매칭에서 같은 placeId로 모인다.
     """
 
-    def __init__(self, inner: BedrockInterpreter, *, max_clues: int = 80, max_workers: int = 4):
+    def __init__(
+        self,
+        inner: BedrockInterpreter,
+        *,
+        max_clues: int = 80,
+        max_workers: int = 4,
+        min_split: int = MIN_SPLIT_CLUES,
+    ):
         self._inner = inner
         self._max_clues = max_clues
         self._max_workers = max_workers
+        self._min_split = min_split
 
     def __repr__(self) -> str:
         return f"ChunkedInterpreter({self._inner!r}, max_clues={self._max_clues})"
 
+    def _span(
+        self, observation: ObservationResult, start: int, end: int, analysis_version: str
+    ) -> list[tuple[int, Interpretation]]:
+        """clues[start:end]를 해석한다. 실패하면 반으로 나눠 다시. (시작 번호, 결과) 목록."""
+        part = observation.model_copy(update={"clues": observation.clues[start:end]})
+        try:
+            return [(start, self._inner.interpret(part, analysis_version))]
+        except InvalidModelOutput:
+            if end - start <= self._min_split:
+                return []
+            mid = (start + end) // 2
+            return self._span(observation, start, mid, analysis_version) + self._span(
+                observation, mid, end, analysis_version
+            )
+
     def interpret(self, observation: ObservationResult, analysis_version: str) -> Interpretation:
-        clues = observation.clues
-        if len(clues) <= self._max_clues:
-            return self._inner.interpret(observation, analysis_version)
-        starts = list(range(0, len(clues), self._max_clues))
-        parts = [
-            observation.model_copy(update={"clues": clues[s : s + self._max_clues]}) for s in starts
-        ]
-
-        def one(part: ObservationResult) -> Interpretation | None:
-            try:
-                return self._inner.interpret(part, analysis_version)
-            except InvalidModelOutput:
-                return None
-
+        n_clues = len(observation.clues)
+        starts = list(range(0, n_clues, self._max_clues)) or [0]
         with ThreadPoolExecutor(self._max_workers) as pool:
-            results = list(pool.map(one, parts))
-        if not any(results):
+            spans = list(
+                pool.map(
+                    lambda s: self._span(
+                        observation, s, min(s + self._max_clues, n_clues), analysis_version
+                    ),
+                    starts,
+                )
+            )
+        pieces = [p for span in spans for p in span]
+        if not pieces:
             raise InvalidModelOutput("llm-gateway", MAX_ATTEMPTS)
+        if len(pieces) == 1 and pieces[0][0] == 0 and n_clues <= self._max_clues:
+            return pieces[0][1]  # 한 번에 끝났으면 그대로
+        results = [r for _, r in pieces]
         candidates = []
-        for n, (offset, r) in enumerate(zip(starts, results, strict=True)):
-            if r is None:
-                continue
+        for n, (offset, r) in enumerate(pieces):
             for c in r.result.candidates:
                 candidates.append(
                     c.model_copy(
@@ -325,6 +378,6 @@ class ChunkedInterpreter:
         )
         return Interpretation(
             link_to_observation(merged, observation),
-            sum(r.input_tokens for r in results if r),
-            sum(r.output_tokens for r in results if r),
+            sum(r.input_tokens for r in results),
+            sum(r.output_tokens for r in results),
         )

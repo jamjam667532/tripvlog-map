@@ -168,3 +168,98 @@ def test_chunked_interpreter_splits_and_restores_clue_refs() -> None:
     assert [c.names[0] for c in out.result.candidates] == ["가게1", "가게3", "가게4"]
     assert len({c.candidate_id for c in out.result.candidates}) == 3
     assert (out.input_tokens, out.output_tokens) == (30, 15)
+
+
+def _inner_failing_above(limit: int, seen: list[int]) -> Any:
+    """단서가 limit개를 넘으면 형식 오류를 내는 가짜 해석기(출력이 잘리는 상황)."""
+    from shared.clients.bedrock import Interpretation
+    from shared.schemas.interpretation import InterpretationResult
+    from shared.schemas.observation import ObservationResult
+
+    class Inner:
+        def interpret(self, o: ObservationResult, version: str) -> Interpretation:
+            seen.append(len(o.clues))
+            if len(o.clues) > limit:
+                raise InvalidModelOutput("llm-gateway", 2)
+            cand = {
+                "candidate_id": "c1",
+                "names": [o.clues[0].seen_text],
+                "category": "RESTAURANT",
+                "visit_status": "VISITED",
+                "clue_refs": [0],
+            }
+            res = InterpretationResult.model_validate(
+                {"video_id": o.video_id, "analysis_version": version, "candidates": [cand]}
+            )
+            return Interpretation(res, 1, 1)
+
+    return Inner()
+
+
+def _obs(n: int) -> Any:
+    from shared.schemas.observation import ObservationResult
+
+    clues = [
+        {"start_sec": i, "end_sec": i, "clue_type": "SCREEN_TEXT", "seen_text": f"가게{i}"}
+        for i in range(n)
+    ]
+    return ObservationResult.model_validate({"video_id": "vid", "clues": clues})
+
+
+def test_chunked_interpreter_splits_a_failed_chunk_in_half() -> None:
+    from shared.clients.bedrock import ChunkedInterpreter
+
+    seen: list[int] = []
+    out = ChunkedInterpreter(_inner_failing_above(2, seen), max_clues=4, min_split=2).interpret(
+        _obs(4), "v"
+    )
+    assert seen == [4, 2, 2]
+    assert [c.clue_refs for c in out.result.candidates] == [[0], [2]]  # 전체 번호로
+
+
+def test_chunked_interpreter_gives_up_at_min_split() -> None:
+    from shared.clients.bedrock import ChunkedInterpreter
+
+    seen: list[int] = []
+    with pytest.raises(InvalidModelOutput):
+        ChunkedInterpreter(_inner_failing_above(0, seen), max_clues=4, min_split=2).interpret(
+            _obs(4), "v"
+        )
+    assert seen == [4, 2, 2]  # 2개 이하는 더 나누지 않는다
+
+
+def test_gateway_truncated_output_is_not_resent_and_reason_is_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from shared.clients.bedrock import GatewayChatInterpreter
+    from tests.unit.clients.transport import RecordingTransport
+
+    cut = '{"candidates": [{"candidate_id": "c1", "names": ["비밀가게'
+    reply = {
+        "choices": [{"message": {"content": cut}, "finish_reason": "length"}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 4096},
+    }
+    t = RecordingTransport(lambda req: (200, reply))
+    gi = GatewayChatInterpreter("bedrock-haiku", api_key="k", base_url="https://gw", transport=t)
+    with caplog.at_level("WARNING"), pytest.raises(InvalidModelOutput):
+        gi.interpret(OBS, "v1")
+    assert len(t.requests) == 1  # 잘린 출력은 같은 입력으로 다시 보내지 않는다
+    assert "finish=length" in caplog.text and "out_tokens=4096" in caplog.text
+    assert "비밀가게" not in caplog.text  # 모델이 쓴 내용은 남기지 않는다
+
+
+def test_gateway_validation_failure_logs_field_names_only(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from shared.clients.bedrock import GatewayChatInterpreter
+    from tests.unit.clients.transport import RecordingTransport
+
+    bad = json.dumps({"candidates": [{**_candidate("c1", [0]), "category": "숨은값HOTEL"}]})
+    reply = {"choices": [{"message": {"content": bad}, "finish_reason": "stop"}], "usage": {}}
+    t = RecordingTransport(lambda req: (200, reply))
+    gi = GatewayChatInterpreter("bedrock-haiku", api_key="k", base_url="https://gw", transport=t)
+    with caplog.at_level("WARNING"), pytest.raises(InvalidModelOutput):
+        gi.interpret(OBS, "v1")
+    assert len(t.requests) == 2
+    assert "candidates.category:literal_error" in caplog.text
+    assert "숨은값" not in caplog.text
