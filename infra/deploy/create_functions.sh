@@ -12,7 +12,7 @@ ZIP=${ZIP:-backend.zip}
 
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text) || exit 1
 ROLE=arn:aws:iam::$ACCOUNT:role/SafeRole-$P
-ENV_JSON='{"Variables":{"JOBS_TABLE":"sgu-clicktotrip-jobs","USERS_TABLE":"sgu-clicktotrip-users","YOUTUBE_CACHE_TABLE":"sgu-clicktotrip-youtube-cache","VIDEO_ANALYSIS_TABLE":"sgu-clicktotrip-video-analysis","PLACES_TABLE":"sgu-clicktotrip-places","COORD_CACHE_TABLE":"sgu-clicktotrip-coord-cache","DATA_BUCKET":"sgu-clicktotrip-data","CONFIG_BUCKET":"sgu-clicktotrip-config","CONFIG_KEY":"keys.json","ANALYSIS_VERSION":"v3-seg190","GEMINI_MODELS":"gemini-3.5-flash-lite,gemini-3.1-flash-lite","BEDROCK_INTERPRETER_MODEL_ID":"bedrock-haiku"}}'
+ENV_JSON='{"Variables":{"JOBS_TABLE":"sgu-clicktotrip-jobs","USERS_TABLE":"sgu-clicktotrip-users","YOUTUBE_CACHE_TABLE":"sgu-clicktotrip-youtube-cache","VIDEO_ANALYSIS_TABLE":"sgu-clicktotrip-video-analysis","PLACES_TABLE":"sgu-clicktotrip-places","COORD_CACHE_TABLE":"sgu-clicktotrip-coord-cache","DATA_BUCKET":"sgu-clicktotrip-data","CONFIG_BUCKET":"sgu-clicktotrip-config","CONFIG_KEY":"keys.json","ANALYSIS_VERSION":"v4-seg190","GEMINI_MODELS":"gemini-3.5-flash-lite,gemini-3.1-flash-lite","BEDROCK_INTERPRETER_MODEL_ID":"bedrock-haiku"}}'
 # api_public은 Step Functions를 만들기 전까지 임시 ARN을 쓴다. 만든 뒤 콘솔에서 진짜 값으로 바꾼다.
 ENV_API="${ENV_JSON%\}\}},\"STATE_MACHINE_ARN\":\"arn:aws:states:ap-northeast-2:000000000000:stateMachine:placeholder\"}}"
 

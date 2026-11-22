@@ -89,7 +89,8 @@ curl -s "$API/public/jobs/<jobId>" -H 'x-guest-access-token: <토큰>'
 
 - **2026-11-20 첫 실행:** 영상 6개 중 4개가 interpret에서 실패, 2개도 후보 0~1개였다. 원인은 학교 게이트웨이의
   `bedrock-haiku`가 생각(thinking)을 켠 채 응답해 보이지 않는 토큰이 출력 한도를 먼저 쓴 것. 생각을 끄고
-  (`thinking: disabled`) 출력 한도 8,192, 묶음 40개로 고쳤다. 분석 버전을 `v3-seg190`으로 올렸다.
+  (`thinking: disabled`) 출력 한도 8,192, 묶음 40개로 고쳤다. 분석 버전을 `v3-seg190`, 이어서 `v4-seg190`으로 올렸다.
+- **CloudShell 파일 업로드는 같은 이름의 파일을 덮어쓰지 않을 수 있다.** 2026-11-22에 예전 `backend.zip`이 그대로 남아 예전 코드가 배포됐다. 올리기 전에 `rm backend.zip`, 올린 뒤 `ls -l`로 크기를 확인한다.
 - **상태 머신을 CLI로 만들면 학교 태그가 자동으로 안 붙는다.** `group=sgu-clicktotrip`, `username=<IAM 사용자>`를
   직접 붙인다(`aws stepfunctions tag-resource`).
 - **SafeRole에 `states:StartExecution`이 처음엔 없었다.** 2026-11-20 담당자 요청으로 추가됨.
