@@ -11,6 +11,7 @@
 | DynamoDB 테이블 6개 | 만듦. GSI 2개 ACTIVE, TTL 2개 ENABLED (CloudShell로 확인) |
 | Lambda 8개 | 만듦. 런타임 Python 3.12, 핸들러, 제한 시간, 메모리, 태그, 환경 변수 완료 |
 | Lambda 시험 실행 | **통과** (11/19). api-public 404, collect `JobNotFound`. zip·환경 변수·keys.json·DynamoDB 권한 확인됨. 아래 2번은 다시 할 필요 없다 |
+| **첫 전체 실행** | **성공** (2026-11-22). 오사카 영상 5/5, 약 3분 30초, 확정 장소 35곳(2곳은 채널 2개에서 확인). API Gateway → Lambda → Step Functions → YouTube·Gemini·게이트웨이·Places → 결과 JSON |
 
 ## 2. Lambda 시험 실행 (유료 API 호출 없음)
 
@@ -86,6 +87,9 @@ curl -s "$API/public/jobs/<jobId>" -H 'x-guest-access-token: <토큰>'
 - [ ] CloudWatch 로그에 키·토큰·좌표가 없는지
 
 ## 6. 알아둘 함정 (실제로 겪은 것)
+
+- **GSI 키 이름은 대소문자까지 정확히.** 2026-11-22에 places의 `videoId-index` 정렬 키가 `evidencekey`(k 소문자)로 만들어져 근거가 색인되지 않았고, 매칭은 44곳 확정인데 결과는 0곳이었다. GSI는 수정이 안 돼서 지우고 `evidenceKey`로 다시 만들었다(색인 약 10분). 만든 뒤 반드시 확인:
+  `aws dynamodb describe-table --table-name sgu-clicktotrip-places --query 'Table.GlobalSecondaryIndexes[].KeySchema'`
 
 - **2026-11-20 첫 실행:** 영상 6개 중 4개가 interpret에서 실패, 2개도 후보 0~1개였다. 원인은 학교 게이트웨이의
   `bedrock-haiku`가 생각(thinking)을 켠 채 응답해 보이지 않는 토큰이 출력 한도를 먼저 쓴 것. 생각을 끄고
