@@ -1,6 +1,6 @@
 # 인수인계: AWS 백엔드 남은 작업 (2026-11-19)
 
-> 브랜치 `feature/aws-first-deploy`. 전체 안내는 `docs/setup-backend.md`, 명세는 `docs/deploy-runbook.md`.
+> 브랜치 `feature/youtube-taste`(최신, 2026-11-22 이후 배포 수정 포함. `feature/aws-first-deploy`는 그 이전 상태). 전체 안내는 `docs/setup-backend.md`, 명세는 `docs/deploy-runbook.md`.
 > 콘솔은 각자 받은 학교 IAM 사용자로 로그인한다. 리전은 **서울(ap-northeast-2)**.
 
 ## 1. 지금까지 된 것

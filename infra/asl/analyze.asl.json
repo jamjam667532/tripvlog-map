@@ -228,7 +228,16 @@
                 "BackoffRate": 2
               }
             ],
-            "Next": "Snapshot"
+            "Next": "Snapshot",
+            "Catch": [
+              {
+                "ErrorEquals": [
+                  "States.ALL"
+                ],
+                "ResultPath": null,
+                "Next": "SnapshotSkipped"
+              }
+            ]
           },
           "Snapshot": {
             "Type": "Task",
@@ -260,7 +269,16 @@
           }
         }
       },
-      "Next": "Replace"
+      "Next": "Replace",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": null,
+          "Next": "Aggregate"
+        }
+      ]
     },
     "Replace": {
       "Type": "Task",

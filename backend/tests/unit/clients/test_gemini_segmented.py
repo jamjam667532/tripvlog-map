@@ -171,3 +171,26 @@ def test_picks_model_with_more_free_slots() -> None:
     )
     obs.observe("vid")
     assert models.calls[0][0] == "second"
+
+
+def test_segment_failure_reason_is_logged_without_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    err = genai_errors.ServerError(
+        503, {"error": {"message": "busy secret-ish", "status": "UNAVAILABLE"}}
+    )
+
+    def reply(model: str, start: int, n: int) -> tuple[Any, int]:
+        if start == 190 and n == 1:
+            return err, 0
+        if start == 380 and n == 1:
+            return "숨은 출력 {not json", 100
+        return _wire(start, 8), 4000
+
+    with caplog.at_level("WARNING"):
+        _observer(FakeModels(reply)).observe("vid")
+    text = caplog.text
+    assert "segment failed: video=vid segment=190-380" in text
+    assert "status=503" in text
+    assert "gemini output rejected" in text and "error=ValidationError" in text
+    assert "숨은 출력" not in text and "secret-ish" not in text

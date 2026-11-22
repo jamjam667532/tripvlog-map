@@ -9,6 +9,7 @@
 - 타임아웃: SDK < Lambda < Step Functions Task.
 """
 
+import logging
 import statistics
 import threading
 import time
@@ -27,6 +28,8 @@ from shared.clients.ai_schema import ai_json_schema
 from shared.clients.errors import ExternalApiError, InvalidModelOutput
 from shared.clients.prompts import load_prompt
 from shared.schemas.observation import Clue, ObservationResult, ObservationWire
+
+logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 2  # 최초 1회 + 재요청 1회
 
@@ -105,6 +108,10 @@ def _generate(
         try:
             resp = client.models.generate_content(model=model, contents=contents, config=config)
         except genai_errors.APIError as e:
+            # 상태 코드만 남긴다(응답 원문에는 요청 정보가 섞일 수 있다)
+            logger.warning(
+                "gemini call failed: model=%s video=%s status=%s", model, video_id, e.code
+            )
             raise ExternalApiError("gemini", getattr(e, "code", None)) from None
         usage = getattr(resp, "usage_metadata", None)
         tokens += int(getattr(usage, "total_token_count", 0) or 0)
@@ -113,7 +120,17 @@ def _generate(
             wire = ObservationWire.model_validate_json(resp.text or "")
             # video_id는 모델 출력이 아니라 요청한 값으로 고정한다
             return _Reply(wire.to_result(video_id, max_sec=max_sec), tokens, output)
-        except (ValidationError, ValueError):
+        except (ValidationError, ValueError) as e:
+            # 원인만 남긴다(모델이 쓴 내용은 남기지 않는다)
+            candidates = getattr(resp, "candidates", None) or [None]
+            logger.warning(
+                "gemini output rejected: model=%s video=%s error=%s finish=%s out_tokens=%s",
+                model,
+                video_id,
+                type(e).__name__,
+                getattr(candidates[0], "finish_reason", None),
+                output,
+            )
             continue
     raise InvalidModelOutput("gemini", MAX_ATTEMPTS)
 
@@ -261,8 +278,17 @@ class SegmentedObserver:
             seg.replies.append(
                 _generate(self._client, model, contents, self._config, video_id, duration)
             )
-        except (ExternalApiError, InvalidModelOutput):
+        except (ExternalApiError, InvalidModelOutput) as e:
             seg.failed = True
+            logger.warning(
+                "segment failed: video=%s segment=%d-%d model=%s error=%s status=%s",
+                video_id,
+                seg.start,
+                seg.end,
+                model,
+                type(e).__name__,
+                getattr(e, "status", None),
+            )
 
     def _thin(self, seg: _Segment, median_out: float) -> bool:
         if not seg.replies:
@@ -295,6 +321,7 @@ class SegmentedObserver:
             f.result()
 
         if not any(seg.replies for seg in segs):
+            logger.warning("all %d segments failed: video=%s", len(segs), video_id)
             raise InvalidModelOutput("gemini", MAX_ATTEMPTS)
         seen: set[tuple[int, str, str]] = set()
         clues: list[Clue] = []

@@ -116,6 +116,15 @@ def test_collect_failure_still_finishes_the_job() -> None:
     assert catch["ResultPath"] is None  # jobId가 담긴 입력을 그대로 넘긴다
 
 
+def test_failure_recording_failure_still_finishes_the_job() -> None:
+    # 2026-11-20: claim에 코드가 없어 MarkFailed까지 실패
+    # → Map 전체가 멈추고 작업이 RUNNING으로 남았다
+    item = ASL["States"]["AnalyzeVideos"]["ItemProcessor"]["States"]
+    assert item["MarkFailed"]["Catch"][0]["Next"] == "SnapshotSkipped"
+    map_catch = ASL["States"]["AnalyzeVideos"]["Catch"][0]
+    assert map_catch["Next"] == "Aggregate" and map_catch["ResultPath"] is None
+
+
 def test_inline_map_and_replacement_loop() -> None:
     assert ASL["States"]["AnalyzeVideos"]["ItemProcessor"]["ProcessorConfig"]["Mode"] == "INLINE"
     assert ASL["States"]["WrapReplacement"]["Next"] == "AnalyzeVideos"
