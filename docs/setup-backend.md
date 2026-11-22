@@ -2,7 +2,7 @@
 
 > 순서대로 하면 된다. 콘솔 리전은 **서울(ap-northeast-2)**, 이름은 모두 `sgu-clicktotrip-`로 시작한다. 근거: 결정 0007.
 > 전체 명세는 `docs/deploy-runbook.md`. 명령은 브랜치 `feature/aws-first-deploy`의 저장소 루트에서 실행한다.
-> 프론트(S3 + CloudFront)는 백엔드 시험이 끝난 뒤에 한다.
+> 프론트(S3 + CloudFront)는 백엔드 시험이 끝난 뒤에 한다(7번).
 
 ## 1. 버킷·키·테이블
 
@@ -159,6 +159,19 @@ curl -s "$API/public/jobs/<jobId>" -H 'x-guest-access-token: <토큰>'
 - [ ] CloudWatch 로그에 키·토큰·좌표·Places 원문이 없는지
 
 **실패하면:** 실행 그래프에서 빨간 단계를 눌러 오류 이름과 그 함수의 CloudWatch 로그를 확인한다.
+
+## 7. 프론트 (S3 + CloudFront)
+
+1. **빌드:** 저장소 루트에서 `cd frontend && VITE_API_BASE=<API 호출 URL> npm run build`. `frontend/.env.local`에 지도 키가 있어야 한다.
+2. **S3 `sgu-clicktotrip-web`:** 퍼블릭 차단 그대로 만들고, `frontend/dist` **안의 내용**(`index.html`, `assets/`)을 최상위에 올린다.
+3. **CloudFront 배포 생성:** 이름 `sgu-clicktotrip-web`, 단일 웹 사이트, 태그 `group`·`username` 입력 → 원본 S3 버킷, 오리진 경로 비움, **프라이빗 S3 버킷 액세스 허용** 체크(OAC, 버킷 정책 자동) → 보안 보호(WAF) **사용 안 함**. 만든 뒤 기본 루트 객체 `index.html`, HTTPS 리디렉션 확인.
+4. **CORS (CloudShell):**
+   ```bash
+   aws apigatewayv2 update-api --api-id <api-id> --cors-configuration '{"AllowOrigins":["https://<배포>.cloudfront.net"],"AllowHeaders":["content-type","x-guest-access-token"],"AllowMethods":["GET","POST","OPTIONS"],"MaxAge":300}'
+   ```
+   반영에 1~2분 걸린다. 확인은 OPTIONS 요청이 `204`와 `access-control-allow-origin`을 돌려주는지.
+5. **지도 키:** 지도 전용 키에 웹사이트 제한 `https://<배포>.cloudfront.net/*`. 서버와 같은 키에는 제한을 걸지 않는다(서버 호출이 막힌다).
+6. **확인:** `curl -sI https://<배포>.cloudfront.net`이 `200`, 브라우저에서 도시 검색 → 지도에 핀.
 
 ## 막히면 전달할 것
 

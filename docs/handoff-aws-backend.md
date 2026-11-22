@@ -1,4 +1,4 @@
-# 인수인계: AWS 백엔드 남은 작업 (2026-11-19)
+# 인수인계: AWS 배포 (2026-11-19 시작, 2026-11-22 1단계 배포 완료)
 
 > 브랜치 `feature/youtube-taste`(최신, 2026-11-22 이후 배포 수정 포함. `feature/aws-first-deploy`는 그 이전 상태). 전체 안내는 `docs/setup-backend.md`, 명세는 `docs/deploy-runbook.md`.
 > 콘솔은 각자 받은 학교 IAM 사용자로 로그인한다. 리전은 **서울(ap-northeast-2)**.
@@ -11,6 +11,8 @@
 | DynamoDB 테이블 6개 | 만듦. GSI 2개 ACTIVE, TTL 2개 ENABLED (CloudShell로 확인) |
 | Lambda 8개 | 만듦. 런타임 Python 3.12, 핸들러, 제한 시간, 메모리, 태그, 환경 변수 완료 |
 | Lambda 시험 실행 | **통과** (11/19). api-public 404, collect `JobNotFound`. zip·환경 변수·keys.json·DynamoDB 권한 확인됨. 아래 2번은 다시 할 필요 없다 |
+| **프론트 배포** | **완료** (2026-11-22). S3 `sgu-clicktotrip-web` + CloudFront `https://d1iehbeyllkxs5.cloudfront.net`(OAC, WAF 끔, 태그 2개). 화면이 API Gateway를 직접 부르고 CORS로 허용 |
+| **화면에서 전체 확인** | **성공** (2026-11-22). 도쿄: 영상 5개 성공, 장소 40곳, 1위는 채널 2개에서 확인 |
 | **첫 전체 실행** | **성공** (2026-11-22). 오사카 영상 5/5, 약 3분 30초, 확정 장소 35곳(2곳은 채널 2개에서 확인). API Gateway → Lambda → Step Functions → YouTube·Gemini·게이트웨이·Places → 결과 JSON |
 
 ## 2. Lambda 시험 실행 (유료 API 호출 없음)
@@ -106,7 +108,32 @@ curl -s "$API/public/jobs/<jobId>" -H 'x-guest-access-token: <토큰>'
 - **CloudShell 파일 업로드가 `Too many requests`로 막히면** 1~2분 기다렸다 다시 한다.
 - 키 값과 `keys.json` 내용은 채팅·스크린샷·로그에 올리지 않는다. 막히면 단계 번호, 함수 이름, 오류 문구만 공유한다.
 
-## 7. 이번 범위가 아닌 것
+## 7. 지금 배포된 주소와 이름
+
+| 항목 | 값 |
+| --- | --- |
+| 화면 | `https://d1iehbeyllkxs5.cloudfront.net` |
+| API | `https://dp4nohrcak.execute-api.ap-northeast-2.amazonaws.com` (스로틀 5/10, CORS는 화면 주소만 허용) |
+| 상태 머신 | `sgu-clicktotrip-analyze` (태그 `group`, `username` 직접 붙임) |
+| 분석 버전 | `v4-seg190` |
+
+**화면을 다시 올리는 법:** 저장소 루트에서
+```bash
+cd frontend && VITE_API_BASE=https://dp4nohrcak.execute-api.ap-northeast-2.amazonaws.com npm run build
+```
+`frontend/.env.local`에 지도 키(`VITE_GOOGLE_MAPS_API_KEY`)가 있어야 한다. 만들어진 `frontend/dist` **안의 내용**을 S3 `sgu-clicktotrip-web` 최상위에 덮어 올린다. 파일 이름에 해시가 붙어 바로 반영된다(`index.html`은 CloudFront 캐시 때문에 몇 분 걸릴 수 있다. 급하면 CloudFront에서 `/index.html` 무효화).
+
+## 8. 남은 일
+
+| 일 | 이유 |
+| --- | --- |
+| **지도 키 분리** | 지금 지도 키 = YouTube·Places 서버 키(같은 키 `y4s2prjct`). 화면 코드에 공개된 키로 서버 API까지 부를 수 있다. 지도 전용 키(웹사이트 제한 + Maps JavaScript API만)를 새로 만들고 프론트를 다시 빌드한다. **기존 키에 웹사이트 제한을 걸면 Lambda의 YouTube·Places 호출이 막힌다** |
+| 지역 이름 | 결과의 지역 묶음이 "지역 1~16". 이름을 붙이는 규칙이 없다 |
+| 목적지 밖 장소 | 오사카 결과에 교토 장소가 섞였다. 도시 반경으로 거를지 결정 필요 |
+| 영상 병렬 처리 | Map 동시성 1이라 영상이 한 줄로 간다(약 3분 30초). 1분 목표에는 Gemini 분당 제한을 Lambda 전체에서 세는 장치가 필요(runbook §9-A) |
+| 로그인·취향 기능 | `docs/handoff-youtube-taste.md` |
+
+## 9. 이번 범위가 아닌 것
 
 - 프론트 배포(S3 + CloudFront): 백엔드 전체 시험이 통과한 뒤.
 - 영상 병렬 처리(Gemini 분당 제한 전역화)와 Gemini 하루 상한: 결정이 필요하다(`docs/deploy-runbook.md` §9).

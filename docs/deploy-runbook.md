@@ -1,6 +1,6 @@
 # AWS 배포 명세서 (M5, 학교 계정)
 
-> 상태: **초안** (C1~C3 코드 완료, 콘솔 작업 전) · 기준일 2026-11-05 · 근거: 결정 0007(계정 제약), 0008(실시간 분석), implementation-spec §2·§4·§11
+> 상태: **1단계 배포 완료** (2026-11-22, 화면 `https://d1iehbeyllkxs5.cloudfront.net`) · 기준일 2026-11-05 · 근거: 결정 0007(계정 제약), 0008(실시간 분석), implementation-spec §2·§4·§11
 > 대상: 배포를 맡는 사람(남현우)과 코드를 고치는 에이전트. 값이 사람 확인이 필요한 곳은 **[확인]**으로 표시했다.
 > 실제 콘솔 순서는 `docs/setup-backend.md`를 따른다(백엔드 먼저, 프론트는 그다음).
 > 이 문서는 명세다. 리소스는 사람이 콘솔에서 직접 만든다(결정 0007-5). `infra/deploy/`의 CloudShell 스크립트는 보관만 한다.
@@ -108,12 +108,13 @@
 - 스테이지 스로틀을 켠다(WAF를 못 쓰므로 공개 API 보호는 이것과 일일 카운터뿐이다). **[확인]** rate·burst 값. 제안: rate 5/s, burst 10.
 - CORS는 CloudFront로 같은 도메인을 쓰면 필요 없다.
 
-### 4.6 CloudFront
+### 4.6 CloudFront (2026-11-22 배포됨)
 
-- 기본 동작: S3(`sgu-clicktotrip-web`, OAC). SPA라서 403/404를 `/index.html`로 돌린다.
-- `/api/*` 동작: API Gateway 오리진, **캐시 끔**, 헤더 `x-guest-access-token`을 오리진에 전달, 경로 접두사 `/api`를 떼고 넘긴다(또는 API 쪽 경로를 맞춘다).
-- WAF는 끈다. HTTPS 인증서는 CloudFront 기본 도메인을 쓴다.
-- **프론트 빌드 환경 변수(남현우 확인):** `VITE_API_BASE`가 없으면 프론트는 **가짜 API로 동작한다**(`frontend/src/api.ts`). 배포 빌드에는 반드시 넣는다. `VITE_GOOGLE_MAPS_API_KEY`(도메인 제한)와 `VITE_GOOGLE_MAPS_MAP_ID`도 필요하다.
+- 기본 동작: S3(`sgu-clicktotrip-web`, OAC, 버킷은 비공개). 기본 루트 객체 `index.html`, HTTP→HTTPS 리디렉션. 화면이 한 페이지라 오류 페이지 설정은 하지 않았다.
+- **`/api/*` 동작은 만들지 않았다.** 대신 화면이 API Gateway 주소를 직접 부르고(`VITE_API_BASE`), API Gateway CORS가 화면 주소만 허용한다(허용 헤더 `content-type`, `x-guest-access-token`, 메서드 `GET`·`POST`·`OPTIONS`). `/api` 접두사를 떼는 설정이 필요 없어 단순하다. 같은 도메인으로 합치는 것은 로그인(M8) 때 다시 본다.
+- WAF는 끈다(학교 계정 조건). HTTPS는 CloudFront 기본 도메인 인증서.
+- 태그 `group`, `username`을 만들 때 넣었다(상태 머신처럼 자동으로 안 붙을 수 있다).
+- **프론트 빌드 환경 변수:** `VITE_API_BASE`가 없으면 프론트는 **가짜 API로 동작한다**(`frontend/src/api.ts`). 배포 빌드에는 반드시 넣는다. 지도 키는 `VITE_GOOGLE_MAPS_API_KEY`. **지금은 서버 키와 같은 키라 분리가 필요하다**(인수인계 문서 §8).
 
 ### 4.7 EventBridge Scheduler·CloudWatch
 
