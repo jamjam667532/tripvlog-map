@@ -96,6 +96,7 @@ class YoutubeCacheRepo:
                 duration_sec=item.duration_sec,
                 privacy_status=item.privacy_status,
                 published_at=item.published_at,
+                tags=list(item.tags),
             )
         return found
 
@@ -108,6 +109,7 @@ class YoutubeCacheRepo:
             duration_sec=meta.duration_sec,
             privacy_status=meta.privacy_status,
             published_at=meta.published_at,
+            tags=list(meta.tags),
             expires_at=now + ttl_days * DAY_SEC,
         )
         self._table.put_item(Item=to_item(item))

@@ -8,6 +8,7 @@
 """
 
 import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -68,9 +69,33 @@ def interest_text(label: str, terms: Sequence[str]) -> str:
     return f"{label} 여행: " + ", ".join(terms)
 
 
+# 설명란에서 영상 내용과 상관없는 줄(협찬·링크·연락처·해시태그만 있는 줄)
+_NOISE = re.compile(
+    r"https?://|www\.|@\w|\b[\w.+-]+@[\w-]+\.|협찬|광고|유료\s*광고|제공받|문의|비즈니스|"
+    r"instagram|인스타|구독|좋아요|알림\s*설정|music\s*by|bgm",
+    re.IGNORECASE,
+)
+DESCRIPTION_CHARS = 300
+VIDEO_TAGS = 15
+
+
+def clean_description(text: str) -> str:
+    """설명란에서 잡음 줄을 빼고 남은 글. 해시태그만 있는 줄도 뺀다(태그는 따로 쓴다)."""
+    kept = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s or _NOISE.search(s) or all(w.startswith("#") for w in s.split()):
+            continue
+        kept.append(s)
+    return " ".join(kept)
+
+
 def video_text(meta: VideoMeta) -> str:
-    """영상 임베딩에 쓰는 문장(제목 + 설명 앞부분)."""
-    return f"{meta.title}\n{meta.description[:300]}"
+    """영상 임베딩에 쓰는 글 = 제목 + 정리한 설명란 앞부분 + 태그."""
+    parts = [meta.title, clean_description(meta.description)[:DESCRIPTION_CHARS]]
+    if meta.tags:
+        parts.append(" ".join(meta.tags[:VIDEO_TAGS]))
+    return "\n".join(p for p in parts if p)
 
 
 def mean_vector(vectors: Sequence[Sequence[float]]) -> list[float]:

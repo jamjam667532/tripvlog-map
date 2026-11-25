@@ -149,3 +149,31 @@ def test_keyword_in_video_text_adds_bonus() -> None:
 def test_term_words_and_mean_vector() -> None:
     assert term_words(["건축 투어", "애니 성지순례", "여행"]) == {"건축", "애니", "성지순례"}
     assert mean_vector([[1.0, 0.0], [0.0, 1.0]]) == [0.5, 0.5]
+
+
+def test_clean_description_drops_sponsor_links_and_hashtag_lines() -> None:
+    from shared.rules.interests import clean_description
+
+    raw = """본 영상은 OO호텔로부터 숙박을 제공받아 제작되었습니다
+📩 비즈니스 문의 travel@example.com
+📷 인스타그램 @tokyo_walker
+https://instagram.com/tokyo_walker
+#도쿄 #건축 #브이로그
+안도 다다오의 건축물을 따라 오모테산도를 걸었어요
+두 번째로 들른 곳은 국립신미술관입니다"""
+    assert clean_description(raw) == (
+        "안도 다다오의 건축물을 따라 오모테산도를 걸었어요 두 번째로 들른 곳은 국립신미술관입니다"
+    )
+
+
+def test_video_text_joins_title_cleaned_description_and_tags() -> None:
+    from shared.rules.interests import video_text
+
+    m = meta("v", "c").model_copy(
+        update={
+            "title": "도쿄 건축 산책",
+            "description": "협찬 문의는 메일로\n쿠마 켄고 건축을 봤어요",
+            "tags": ["안도다다오", "건축여행"],
+        }
+    )
+    assert video_text(m) == "도쿄 건축 산책\n쿠마 켄고 건축을 봤어요\n안도다다오 건축여행"

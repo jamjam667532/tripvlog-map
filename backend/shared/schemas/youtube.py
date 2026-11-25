@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from shared.schemas.common import ChannelId, VideoId
 
@@ -18,3 +18,4 @@ class VideoMeta(BaseModel):
     privacy_status: Literal["public", "unlisted", "private"]
     published_at: AwareDatetime
     embeddable: bool = True
+    tags: list[str] = Field(default_factory=list)  # 올린 사람이 붙인 태그(결정 0011, 영상 임베딩용)

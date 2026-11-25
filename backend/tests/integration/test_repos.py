@@ -236,9 +236,16 @@ def test_youtube_search_and_video_cache(repos: Repos) -> None:
         duration_sec=600,
         privacy_status="public",
         published_at=NOW - timedelta(days=10),
+        tags=["오사카여행", "도톤보리"],  # 결정 0011: 영상 임베딩용 태그도 캐시
     )
     y.put_video(meta, now=NOW_EPOCH, ttl_days=25)
     assert y.get_videos(["v1", "v2"], now=NOW_EPOCH) == {"v1": meta}
+
+    # 영상 임베딩 캐시: 모델이 다르거나 만료되면 없는 것으로 본다
+    y.put_embedding("v1", [0.1, 0.2], model="m1", now=NOW_EPOCH, ttl_days=25)
+    assert y.get_embeddings(["v1", "v2"], model="m1", now=NOW_EPOCH) == {"v1": [0.1, 0.2]}
+    assert y.get_embeddings(["v1"], model="m2", now=NOW_EPOCH) == {}
+    assert y.get_embeddings(["v1"], model="m1", now=NOW_EPOCH + 26 * 86_400) == {}
 
 
 def test_youtube_daily_search_quota(repos: Repos) -> None:

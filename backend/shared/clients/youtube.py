@@ -23,6 +23,7 @@ VIDEOS_UNITS = 1
 MAX_IDS_PER_VIDEOS_CALL = 50
 LIST_UNITS = 1  # channels·playlistItems·subscriptions·videos(myRating) 1쪽
 PAGE_SIZE = 50
+MAX_TAGS = 20
 MAX_SUBSCRIPTION_PAGES = 4  # 구독 최대 200개
 MAX_LIKED_PAGES = 2  # 좋아요 최대 100개
 
@@ -117,7 +118,7 @@ class YouTubeDataApi:
                     "part": "snippet,contentDetails,status",
                     "id": ",".join(chunk),
                     "fields": (
-                        "items(id,snippet(channelId,title,description,publishedAt),"
+                        "items(id,snippet(channelId,title,description,publishedAt,tags),"
                         "contentDetails/duration,status(privacyStatus,embeddable))"
                     ),
                 },
@@ -268,6 +269,7 @@ def _to_meta(item: dict[str, Any]) -> VideoMeta:
             privacy_status=status["privacyStatus"],
             published_at=snippet["publishedAt"],
             embeddable=status.get("embeddable", True),
+            tags=[str(t) for t in snippet.get("tags", [])][:MAX_TAGS],
         )
     except (KeyError, ValueError) as e:
         raise ExternalApiError(

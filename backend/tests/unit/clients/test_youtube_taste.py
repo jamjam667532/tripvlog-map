@@ -84,3 +84,26 @@ def test_rejected_token_raises_with_status_only() -> None:
         YouTubeUserApi("t", transport=t).liked_videos()
     assert e.value.status == 401
     assert "secret-ish" not in str(e.value)
+
+
+def test_videos_include_tags() -> None:
+    body = {
+        "items": [
+            {
+                "id": "v1",
+                "snippet": {
+                    "channelId": "c1",
+                    "title": "도쿄 건축",
+                    "description": "",
+                    "publishedAt": "2026-10-01T00:00:00Z",
+                    "tags": ["안도다다오", "건축여행"],
+                },
+                "contentDetails": {"duration": "PT12M"},
+                "status": {"privacyStatus": "public"},
+            }
+        ]
+    }
+    t = RecordingTransport(lambda req: (200, body))
+    metas = YouTubeDataApi("key", transport=t).videos(["v1"])
+    assert metas[0].tags == ["안도다다오", "건축여행"]
+    assert "tags" in _query(t.requests[0])["fields"]

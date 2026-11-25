@@ -252,6 +252,7 @@ class YoutubeVideoCacheItem(CamelModel):
     duration_sec: NonNegative
     privacy_status: Literal["public", "unlisted", "private"]
     published_at: AwareDatetime
+    tags: list[str] = Field(default_factory=list)  # 결정 0011: 영상 임베딩용(25일 캐시)
     expires_at: EpochSeconds
 
 
