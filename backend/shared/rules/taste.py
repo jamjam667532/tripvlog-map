@@ -14,11 +14,12 @@ import unicodedata
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from shared.rules.selection import DESTINATION_ALIASES, Selection, text_mentions_destination
 from shared.rules.style_tags import video_styles
 from shared.schemas.common import Style
-from shared.schemas.items import UserItem
+from shared.schemas.items import UserItem, YoutubeLink
 from shared.schemas.taste import ChannelInfo, ChannelTasteLabel, ChannelVideo
 from shared.schemas.youtube import VideoMeta
 
@@ -165,11 +166,22 @@ def combined_style_profile(
     return {style: round(n / total, 2) for style, n in counts.most_common()}
 
 
-def profile_of(user: UserItem | None) -> TasteProfile | None:
+def live_youtube(user: UserItem | None, now: datetime) -> YoutubeLink | None:
+    """만료되지 않은 유튜브 연결 데이터. 연결 후 25일(resyncDueAt)이 지나면 쓰지 않는다.
+
+    YouTube API 정책상 받은 데이터는 30일 안에 갱신·삭제해야 한다. Users 테이블은 TTL 대상이
+    아니라서 읽을 때 만료를 판단한다(매일 지우는 cleanup Lambda는 두지 않는다. 결정 0011).
+    """
+    if user is None or user.youtube is None or now >= user.youtube.resync_due_at:
+        return None
+    return user.youtube
+
+
+def profile_of(user: UserItem | None, now: datetime) -> TasteProfile | None:
     """실제로 쓸 취향. 사용자가 고친 값(preferences)이 우선, 없으면 유튜브에서 자동으로 만든 값."""
     if user is None:
         return None
-    prefs, yt = user.preferences, user.youtube
+    prefs, yt = user.preferences, live_youtube(user, now)
     channels = prefs.reference_channel_ids or (yt.travel_channel_ids if yt else [])
     if prefs.styles:
         weights = {s: round(1 / len(prefs.styles), 2) for s in prefs.styles}

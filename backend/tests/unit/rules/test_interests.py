@@ -1,6 +1,6 @@
 """[M8] 관심사 기반 테마 추천 규칙 (결정 0011)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -92,13 +92,18 @@ def test_theme_queries_use_top_interests_first_term() -> None:
 
 def test_active_interests_skip_hidden_ones() -> None:
     link = YoutubeLink.model_validate(
-        {"linked": True, "syncedAt": NOW.isoformat(), "resyncDueAt": NOW.isoformat()}
+        {
+            "linked": True,
+            "syncedAt": NOW.isoformat(),
+            "resyncDueAt": (NOW + timedelta(days=25)).isoformat(),
+        }
     ).model_copy(update={"interests": [interest("건축", [1.0]), interest("애니", [1.0])]})
     user = UserItem(
         user_id="u", youtube=link, preferences=UserPreferences(hidden_interests=["애니"])
     )
-    assert [i.label for i in active_interests(user)] == ["건축"]
-    assert active_interests(None) == [] and active_interests(UserItem(user_id="u")) == []
+    assert [i.label for i in active_interests(user, NOW)] == ["건축"]
+    assert active_interests(None, NOW) == [] and active_interests(UserItem(user_id="u"), NOW) == []
+    assert active_interests(user, NOW + timedelta(days=25)) == []  # 25일 지나면 만료
 
 
 def test_compose_three_personalized_then_general() -> None:

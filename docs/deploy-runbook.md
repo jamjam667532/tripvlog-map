@@ -74,7 +74,7 @@
 | match | 120 | 512 | Places | |
 | aggregate | 120 | 512 | - | |
 | api_public | 15 | 256 | Step Functions | 환경 변수에 `STATE_MACHINE_ARN` 추가 |
-| cleanup | 300 | 256 | YouTube | **아직 껍데기.** 구현 전에는 스케줄을 켜지 않는다 |
+| cleanup | 300 | 256 | YouTube | **쓰지 않는다**(결정 0011: DynamoDB TTL로 충분, 유튜브 연결 데이터는 읽을 때 만료 판단). 스케줄도 만들지 않는다 |
 
 타임아웃·메모리는 `infra/deploy/create.sh` 초안의 값이고 **측정한 값이 아니다.** 첫 실행 뒤 CloudWatch의 실제 사용량으로 조정한다.
 
@@ -119,7 +119,7 @@
 
 ### 4.7 EventBridge Scheduler·CloudWatch
 
-- `sgu-clicktotrip-cleanup-daily`: 하루 1회, cleanup 구현 뒤에만 활성화.
+- `sgu-clicktotrip-cleanup-daily`: **만들지 않는다**(결정 0011). 만료 삭제는 DynamoDB TTL이 한다.
 - 로그 그룹은 Lambda마다 자동 생성된다. **보존 기간을 정한다**(제안 14일). 로그에 토큰·키·Places 원문·좌표가 남지 않아야 한다.
 
 ## 5. Step Functions 흐름 명세 (ASL 작성 기준, C3)

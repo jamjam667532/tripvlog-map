@@ -11,8 +11,10 @@ import math
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from shared.rules.selection import Selection
+from shared.rules.taste import live_youtube
 from shared.schemas.items import UserInterest, UserItem
 from shared.schemas.taste import InterestProposal
 from shared.schemas.youtube import VideoMeta
@@ -118,12 +120,13 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     return sum(x * y for x, y in zip(a, b, strict=False)) / (na * nb)
 
 
-def active_interests(user: UserItem | None) -> list[UserInterest]:
-    """사용자가 끄지 않은 관심사. 유튜브 연결이 없으면 빈 목록."""
-    if user is None or user.youtube is None:
+def active_interests(user: UserItem | None, now: datetime) -> list[UserInterest]:
+    """사용자가 끄지 않은 관심사. 유튜브 연결이 없거나 25일이 지나 만료됐으면 빈 목록."""
+    yt = live_youtube(user, now)
+    if user is None or yt is None:
         return []
     hidden = set(user.preferences.hidden_interests)
-    return [i for i in user.youtube.interests if i.label not in hidden]
+    return [i for i in yt.interests if i.label not in hidden]
 
 
 def theme_queries(

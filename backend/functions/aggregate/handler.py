@@ -159,7 +159,7 @@ def build_result(job: JobItem, deps: Deps, now: datetime) -> JobResult:
 
     # 로그인 작업이면 취향 프로필로 순위를 개인화한다(결정 0010 개정): 구독 여행 채널이 다녀간
     # 장소에 가중치, 장소 스타일이 취향 비율과 겹치는 만큼 가산
-    profile = profile_of(repos.users.get(job.user_id)) if job.user_id else None
+    profile = profile_of(repos.users.get(job.user_id), now) if job.user_id else None
     # 결정 0011: 장소는 자기가 나온 영상의 관심사 점수를 물려받는다
     boosts, themes = place_theme_boosts(
         {a.place_id: {e.video_id for e in a.evidence} for a in aggregates},

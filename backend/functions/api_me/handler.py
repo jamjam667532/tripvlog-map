@@ -130,11 +130,12 @@ def _interest_views(
     ]
 
 
-def _me(user: UserItem) -> MeResponse:
+def _me(user: UserItem, now: datetime) -> MeResponse:
     yt = user.youtube
     return MeResponse(
         preferences=user.preferences,
         youtube_linked=bool(yt and yt.linked),
+        youtube_expired=bool(yt and now >= yt.resync_due_at),
         synced_at=yt.synced_at if yt else None,
         resync_due_at=yt.resync_due_at if yt else None,
         travel_channel_ids=list(yt.travel_channel_ids) if yt else [],
@@ -159,11 +160,11 @@ def _save_preferences(
         return _error(400, "UNKNOWN_CHANNEL", "reference channels must come from the candidates")
     updated = user.model_copy(update={"preferences": prefs})
     deps.repos.users.put(updated)
-    return _response(200, _me(updated))
+    return _response(200, _me(updated, deps.clock()))
 
 
 def get_preferences(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str, Any]:
-    return _response(200, _me(deps.repos.users.get_or_new(user_id)))
+    return _response(200, _me(deps.repos.users.get_or_new(user_id), deps.clock()))
 
 
 def patch_preferences(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str, Any]:
@@ -181,7 +182,7 @@ def confirm_youtube(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str
 def delete_connection(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str, Any]:
     if deps.repos.users.get(user_id) is not None:
         deps.repos.users.remove_youtube(user_id)
-    return _response(200, _me(deps.repos.users.get_or_new(user_id)))
+    return _response(200, _me(deps.repos.users.get_or_new(user_id), deps.clock()))
 
 
 def _interests(

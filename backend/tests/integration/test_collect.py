@@ -213,7 +213,7 @@ def test_auto_profile_from_youtube_is_used_without_any_user_edit(
         {
             "linked": True,
             "syncedAt": NOW.isoformat(),
-            "resyncDueAt": NOW.isoformat(),
+            "resyncDueAt": (NOW + timedelta(days=25)).isoformat(),
             "travelChannelIds": ["pc1"],
             "styleProfileCandidate": {"맛집": 1.0},
         }
@@ -239,7 +239,7 @@ def _interest_user(repos: Repos, *, travel: list[str] | None = None) -> str:
         {
             "linked": True,
             "syncedAt": NOW.isoformat(),
-            "resyncDueAt": NOW.isoformat(),
+            "resyncDueAt": (NOW + timedelta(days=25)).isoformat(),
             "travelChannelIds": travel or [],
         }
     ).model_copy(

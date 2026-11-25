@@ -268,3 +268,27 @@ def test_hidden_interest_is_marked_in_preferences(deps: Deps) -> None:
     hidden = {i["label"]: i["hidden"] for i in body["interests"]}
     assert hidden == {"건축": False, "맛집": True}
     assert all(i["evidenceTitles"] == [] for i in body["interests"])  # 제목은 저장하지 않는다
+
+
+def test_preferences_show_expired_youtube_link(
+    repos: Repos, settings: Settings, user_api: FakeYouTubeUser, labeler: FakeTasteLabeler
+) -> None:
+    """25일이 지나면 다시 연결해야 한다고 알린다(데이터는 쓰지 않는다)."""
+    from datetime import timedelta
+
+    def at(when: Any) -> Deps:
+        return Deps(
+            settings=settings,
+            repos=repos,
+            youtube=FakeYouTube({}, [], channels=CHANNELS),
+            youtube_for=user_api.for_token,
+            labeler=labeler,
+            extractor=FakeInterestExtractor(PROPOSALS),
+            embedder=FakeEmbedder(),
+            clock=lambda: when,
+        )
+
+    call(at(NOW), event("POST /me/youtube/import", token=TOKEN))
+    _, fresh = call(at(NOW), event("GET /me/preferences"))
+    _, stale = call(at(NOW + timedelta(days=25)), event("GET /me/preferences"))
+    assert (fresh["youtubeExpired"], stale["youtubeExpired"]) == (False, True)

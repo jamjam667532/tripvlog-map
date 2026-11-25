@@ -1,6 +1,6 @@
 """[M8] 취향 분석 규칙 (결정 0010)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from shared.rules.aggregation import aggregate_places
 from shared.rules.ranking import rank_places
@@ -136,7 +136,7 @@ def _link(channels: list[str], weights: dict[str, float]) -> YoutubeLink:
         {
             "linked": True,
             "syncedAt": NOW_T.isoformat(),
-            "resyncDueAt": NOW_T.isoformat(),
+            "resyncDueAt": (NOW_T + timedelta(days=25)).isoformat(),
             "travelChannelIds": channels,
             "styleProfileCandidate": weights,
         }
@@ -165,15 +165,15 @@ def test_combined_style_profile_uses_likes_and_travel_channel_labels() -> None:
 
 def test_profile_prefers_user_edits_over_auto() -> None:
     auto = UserItem(user_id="u", youtube=_link(["c1", "c2"], {"맛집": 0.7, "카페·포토스팟": 0.3}))
-    p = profile_of(auto)
+    p = profile_of(auto, NOW_T)
     assert p == TasteProfile(("c1", "c2"), {"맛집": 0.7, "카페·포토스팟": 0.3})
 
     edited = auto.model_copy(
         update={"preferences": UserPreferences(styles=["관광·역사"], reference_channel_ids=["c2"])}
     )
-    assert profile_of(edited) == TasteProfile(("c2",), {"관광·역사": 1.0})
-    assert profile_of(None) is None
-    assert profile_of(UserItem(user_id="u")) is None
+    assert profile_of(edited, NOW_T) == TasteProfile(("c2",), {"관광·역사": 1.0})
+    assert profile_of(None, NOW_T) is None
+    assert profile_of(UserItem(user_id="u"), NOW_T) is None
 
 
 def test_style_similarity_and_video_score() -> None:
@@ -219,3 +219,14 @@ def test_ranking_adds_taste_weight_by_style_share() -> None:
     assert [r.place_id for r in plain] == ["P_c", "P_r"]  # 동점 → placeId 순
     tasted = rank_places(aggs, categories=cats, style_weights={"맛집": 0.8, "카페·포토스팟": 0.2})
     assert [r.place_id for r in tasted] == ["P_r", "P_c"]
+
+
+def test_youtube_profile_expires_after_resync_due_but_user_edits_remain() -> None:
+    """YouTube API 정책상 30일 안에 갱신·삭제. 25일이 지나면 자동 프로필을 쓰지 않는다."""
+    auto = UserItem(user_id="u", youtube=_link(["c1"], {"맛집": 1.0}))
+    later = NOW_T + timedelta(days=25)
+    assert profile_of(auto, later) is None
+    edited = auto.model_copy(update={"preferences": UserPreferences(styles=["카페·포토스팟"])})
+    assert profile_of(edited, later) == TasteProfile(
+        (), {"카페·포토스팟": 1.0}
+    )  # 사용자 값은 남는다

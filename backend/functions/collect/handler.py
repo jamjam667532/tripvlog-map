@@ -198,8 +198,8 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
     ids = merge_round_robin(results)
     # 로그인 작업이면 취향 프로필(결정 0010 개정)과 관심사(결정 0011)로 고른다
     user = deps.repos.users.get(job.user_id) if job.user_id else None
-    profile = profile_of(user)
-    interests = active_interests(user) if deps.embedder is not None else []
+    profile = profile_of(user, now_dt)
+    interests = active_interests(user, now_dt) if deps.embedder is not None else []
     theme_ids = merge_round_robin(
         [_search(deps, q, "relevance", after, now) for q in theme_queries(interests, dest)]
     )

@@ -92,6 +92,7 @@ class MeResponse(CamelModel):
 
     preferences: UserPreferences
     youtube_linked: bool = False
+    youtube_expired: bool = False  # 연결 후 25일이 지나 다시 연결해야 함
     synced_at: AwareDatetime | None = None
     resync_due_at: AwareDatetime | None = None
     travel_channel_ids: list[ChannelId] = Field(default_factory=list)
