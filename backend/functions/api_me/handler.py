@@ -27,6 +27,7 @@ from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
+from functions.job_api import Unauthorized, user_id_of
 from shared.clients.bedrock import GatewayChat
 from shared.clients.errors import ExternalApiError
 from shared.clients.secrets import (
@@ -58,7 +59,6 @@ from shared.settings import Settings, require
 logger = logging.getLogger(__name__)
 
 ACCESS_TOKEN_HEADER = "x-google-access-token"
-USER_PREFIX = "google:"
 MAX_CHANNELS_CHECKED = 250  # 구독 200 + 좋아요 영상의 채널
 
 
@@ -70,20 +70,6 @@ class Deps:
     youtube_for: Callable[[str], YouTubeUserClient]  # 액세스 토큰 → 사용자 조회 클라이언트
     labeler: TasteLabeler
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
-
-
-class Unauthorized(Exception):
-    pass
-
-
-def user_id_of(event: dict[str, Any]) -> str:
-    claims = (((event.get("requestContext") or {}).get("authorizer") or {}).get("jwt") or {}).get(
-        "claims"
-    ) or {}
-    sub = claims.get("sub")
-    if not isinstance(sub, str) or not sub:
-        raise Unauthorized
-    return USER_PREFIX + sub
 
 
 def _response(status: int, body: BaseModel) -> dict[str, Any]:

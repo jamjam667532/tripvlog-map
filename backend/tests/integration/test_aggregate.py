@@ -6,7 +6,14 @@ from typing import Any
 from functions.aggregate.handler import Deps, run
 from shared.repos import Repos, analysis_key, result_key, with_refs
 from shared.schemas.events import AggregateInput, AggregateOutput, ReplaceOutput
-from shared.schemas.items import JobItem, PlaceItem, SpareVideo, VideoRef
+from shared.schemas.items import (
+    JobItem,
+    PlaceItem,
+    SpareVideo,
+    UserItem,
+    UserPreferences,
+    VideoRef,
+)
 from shared.schemas.match import ConfirmedMatch, MatchSummary, UnconfirmedMatch
 from shared.schemas.places import GeoPoint
 from shared.settings import Settings
@@ -200,3 +207,42 @@ def test_aggregate_without_any_video_fails(repos: Repos, settings: Settings) -> 
     out = _aggregate(repos, settings, job)
     assert out.status == "FAILED"
     assert repos.jobs.require(str(job.job_id)).status == "FAILED"
+
+
+def _tied_places(repos: Repos, job_kw: dict[str, Any]) -> JobItem:
+    """채널 c1이 P_a, c2가 P_b를 방문. 다른 조건은 같아 기본 순위는 placeId 순(P_a 먼저)."""
+    job = guest_job(**job_kw)
+    repos.jobs.create(job)
+    job = repos.jobs.mutate(
+        str(job.job_id), lambda j: with_refs(j, [ref("v1", "c1"), ref("v2", "c2")]), NOW
+    )
+    _place(repos, "P_a", "가게A", "RESTAURANT", 34.66, 135.50)
+    _place(repos, "P_b", "가게B", "RESTAURANT", 34.67, 135.51)
+    repos.places.put_evidence(evidence("P_a", "c1", "v1", 10))
+    repos.places.put_evidence(evidence("P_b", "c2", "v2", 20))
+    return job
+
+
+def test_login_job_ranks_places_of_reference_channels_higher(
+    repos: Repos, settings: Settings, aws: tuple[Any, Any]
+) -> None:
+    """결정 0010-2: 사용자가 확인한 참고 채널이 방문한 장소에 가중치."""
+    user = "google:u1"
+    repos.users.put(
+        UserItem(user_id=user, preferences=UserPreferences(reference_channel_ids=["c2"]))
+    )
+    job = _tied_places(repos, {"guestAccessHash": None, "userId": user})
+    out = _aggregate(repos, settings, job)
+    _, s3 = aws
+    body = json.loads(s3.get_object(Bucket=settings.bucket, Key=out.result_s3_key)["Body"].read())
+    assert [p["placeId"] for p in body["places"]] == ["P_b", "P_a"]
+
+
+def test_guest_job_ranking_ignores_reference_channels(
+    repos: Repos, settings: Settings, aws: tuple[Any, Any]
+) -> None:
+    job = _tied_places(repos, {})
+    out = _aggregate(repos, settings, job)
+    _, s3 = aws
+    body = json.loads(s3.get_object(Bucket=settings.bucket, Key=out.result_s3_key)["Body"].read())
+    assert [p["placeId"] for p in body["places"]] == ["P_a", "P_b"]

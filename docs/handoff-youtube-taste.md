@@ -33,7 +33,7 @@
 
 ## 4. 남은 일 (순서대로)
 
-1. **`api_jobs`**(로그인 사용자 작업 생성, `POST /jobs`, `GET /jobs/{jobId}`): 지금 빈 껍데기라 개인 영상 기능이 실제 요청에서는 아직 안 돈다. `api_public`을 참고하되 `userId = google:<sub>`, 게스트 토큰 없음. 요청 스타일이 비어 있으면 저장된 선호를 기본값으로.
+1. ~~**`api_jobs`**~~ **완료(2026-11-25).** `POST /jobs`(요청 스타일이 비면 저장된 선호), `GET /jobs/{jobId}`(본인 작업만), `POST /jobs/{jobId}/rerank`(순위만 다시, 저장 안 함). 게스트와 공통인 작업 만들기·조회는 `functions/job_api.py`. 집계가 로그인 작업이면 참고 채널을 순위에 반영한다. 게스트 경로는 **체험 모드로 유지**한다(테스트 사용자 등록 없이 누구나 써 볼 수 있고, 개인화 전후 비교를 보여 줄 수 있어서).
 2. **M8 로그인 배포:** API Gateway JWT Authorizer(issuer `https://accounts.google.com`, audience = OAuth 클라이언트 ID), `/me/*`·`/jobs` 경로, `api_me`·`api_jobs` Lambda. 결정 0007-2의 TODO(`iss` 형식) 확인.
 3. **Google Cloud 설정:** OAuth 클라이언트(웹), 동의 화면 테스트 모드 + 테스트 사용자 등록, 연결 버튼에서만 `youtube.readonly` 요청.
 4. **프론트:** 유튜브 연결 버튼 → `POST /me/youtube/import`(헤더 `X-Google-Access-Token`) → 후보 체크 화면 → `POST /me/youtube/confirm`. 연결 해제 버튼.

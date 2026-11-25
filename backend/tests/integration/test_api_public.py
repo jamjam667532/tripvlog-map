@@ -6,7 +6,8 @@ from typing import Any
 
 import pytest
 
-from functions.api_public.handler import Deps, hash_token, job_id_for, run
+from functions.api_public.handler import Deps, hash_token, run
+from functions.job_api import job_id_for
 from shared.repos import Repos, result_key, with_refs
 from shared.schemas.items import VideoRef
 from shared.schemas.result import JobResult

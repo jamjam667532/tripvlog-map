@@ -155,7 +155,15 @@ def build_result(job: JobItem, deps: Deps, now: datetime) -> JobResult:
     for pid, item in stored.items():
         categories[pid] = item.category_from_video
 
-    ranked = rank_places(aggregates, categories=categories, styles=job.request.styles)
+    # 로그인 작업이면 사용자가 확인한 참고 채널이 방문한 장소에 가중치(결정 0010-2)
+    user = repos.users.get(job.user_id) if job.user_id else None
+    reference = user.preferences.reference_channel_ids if user else []
+    ranked = rank_places(
+        aggregates,
+        categories=categories,
+        styles=job.request.styles,
+        reference_channel_ids=reference,
+    )
     coords = repos.coords.get_many([r.place_id for r in ranked], now=int(now.timestamp()))
     # TODO(decision 0004-4): 좌표가 만료된 장소는 지도 결과에서 빼고 순위를 다시 매긴다
     pinned = [r for r in ranked if r.place_id in coords]
