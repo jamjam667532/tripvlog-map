@@ -165,13 +165,34 @@ def test_login_job_puts_already_analyzed_personal_videos_first(
     assert youtube.upload_calls == ["pc1", "pc2"]
 
 
-def test_personal_videos_not_yet_analyzed_are_not_added(repos: Repos, settings: Settings) -> None:
-    _analyzed(repos, "p2", "pc2")  # p1은 분석된 적 없다 → 새로 분석하지 않으므로 넣지 않는다
+def test_personal_videos_not_yet_analyzed_are_added_after_analyzed_ones(
+    repos: Repos, settings: Settings
+) -> None:
+    """결정 0010 개정: 분석된 적 없는 개인 영상도 넣는다(실시간 분석). 분석된 것이 먼저."""
+    _analyzed(repos, "p2", "pc2")
     job_id = _user_job(repos)
     youtube = FakeYouTube(SEARCH, METAS + PERSONAL, uploads=UPLOADS)
     out = run(JobInput.model_validate({"jobId": job_id}), _deps(repos, settings, youtube))
     ids = [r.video_id for r in out.video_refs]
-    assert ids[0] == "p2" and "p1" not in ids
+    assert ids[:2] == ["p2", "p1"]
+    assert len(ids) == settings.max_videos_per_job  # 개인 영상이 일반 영상 자리를 대신한다
+
+
+def test_channel_prefers_its_already_analyzed_video(repos: Repos, settings: Settings) -> None:
+    newer = meta("p1new", "pc1", title="오사카 신상 맛집")
+    uploads = {
+        **UPLOADS,
+        "pc1": [
+            ChannelVideo(video_id="p1new", channel_id="pc1", title="오사카 신상 맛집"),
+            ChannelVideo(video_id="p1", channel_id="pc1", title="오사카 3박 4일"),
+        ],
+    }
+    _analyzed(repos, "p1", "pc1")
+    job_id = _user_job(repos)
+    youtube = FakeYouTube(SEARCH, [*METAS, *PERSONAL, newer], uploads=uploads)
+    out = run(JobInput.model_validate({"jobId": job_id}), _deps(repos, settings, youtube))
+    ids = [r.video_id for r in out.video_refs]
+    assert ids[0] == "p1" and "p1new" not in ids  # 채널당 1개, 분석된 영상이 이긴다
 
 
 def test_guest_job_does_not_look_at_personal_channels(repos: Repos, settings: Settings) -> None:

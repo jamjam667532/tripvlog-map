@@ -3,8 +3,9 @@
 입력 {jobId} → 출력 {jobId, videoRefs:[{jobId, videoId, channelId, analysisVersion}]}
 YouTube 검색 결과·메타데이터는 YoutubeCache(25일)를 먼저 본다. 조회수 등 지표는 쓰지 않는다.
 
-로그인 작업이면(결정 0010) 사용자가 확인한 참고 채널의 이 도시 영상 중
-**이미 분석된 영상만** 최대 2개를 앞에 넣는다. 개인 영상 때문에 새로 분석하지 않는다(비용 원칙).
+로그인 작업이면(결정 0010, 2026-11-25 개정) 사용자가 확인한 참고 채널의 이 도시 영상을
+최대 2개 앞에 넣는다. 이미 분석된 영상을 먼저 고르고, 없으면 새로 분석한다(실시간).
+개인 영상은 일반 영상 자리를 대신하므로 요청당 분석 영상 수(최대 5)는 늘지 않는다.
 게스트 작업은 그대로다.
 """
 
@@ -33,6 +34,7 @@ SEARCH_PLAN: tuple[tuple[str, SearchOrder], ...] = (
 )
 MAX_RESULTS = 25
 MAX_PERSONAL_CHANNELS = 5  # 업로드 목록 조회 상한(채널당 1 unit)
+PERSONAL_UPLOADS_PER_CHANNEL = 3  # 채널마다 이 도시 영상 중 최근 몇 개까지 후보로 보는가
 SEARCH_YEARS = 2
 
 
@@ -91,21 +93,28 @@ def _metas(deps: Deps, video_ids: list[str], now: int) -> dict[str, VideoMeta]:
 def _personal_videos(
     deps: Deps, user_id: str, destination: str, now_dt: datetime, now: int
 ) -> list[VideoMeta]:
-    """사용자가 확인한 채널의 이 도시 영상 중 이미 분석된(DONE) 영상만, 채널 순서대로."""
+    """사용자가 확인한 채널의 이 도시 영상. 이미 분석된(DONE) 영상이 앞, 나머지는 채널·최신 순."""
     user = deps.repos.users.get(user_id)
     if user is None:
         return []
     version = deps.settings.analysis_version
-    analyzed: list[str] = []
+    candidates: list[str] = []
     for channel_id in user.preferences.reference_channel_ids[:MAX_PERSONAL_CHANNELS]:
-        for video in destination_uploads(deps.youtube.uploads(channel_id), destination):
-            item = deps.repos.video_analysis.get(video.video_id, version)
-            if item is not None and item.status == "DONE":
-                analyzed.append(video.video_id)
-    if not analyzed:
+        uploads = destination_uploads(deps.youtube.uploads(channel_id), destination)
+        candidates.extend(v.video_id for v in uploads[:PERSONAL_UPLOADS_PER_CHANNEL])
+    if not candidates:
         return []
-    metas = _metas(deps, analyzed, now)
-    return [metas[v] for v in analyzed if v in metas and eligible(metas[v], now_dt, destination)]
+    metas = _metas(deps, candidates, now)
+    picked = [
+        metas[v] for v in candidates if v in metas and eligible(metas[v], now_dt, destination)
+    ]
+
+    def analyzed(meta: VideoMeta) -> bool:
+        item = deps.repos.video_analysis.get(meta.video_id, version)
+        return item is not None and item.status == "DONE"
+
+    # 이미 분석된 영상을 먼저 써서 첫 분석 비용과 기다림을 줄인다(정렬은 안정적: 같으면 원래 순서)
+    return sorted(picked, key=lambda m: not analyzed(m))
 
 
 def _output(job: JobItem) -> CollectOutput:

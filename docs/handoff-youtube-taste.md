@@ -5,7 +5,7 @@
 
 ## 1. 한 줄 요약
 
-로그인한 사용자가 유튜브를 연결하면 구독·좋아요를 **한 번** 읽어 여행 채널 후보와 스타일 비율을 보여 주고, **사용자가 고른 것만** 저장한다. 저장된 채널은 순위 가중치와, 그 채널의 **이미 분석된** 영상을 요청 5개 중 최대 2개로 넣는 데 쓴다.
+로그인한 사용자가 유튜브를 연결하면 구독·좋아요를 **한 번** 읽어 여행 채널 후보와 스타일 비율을 보여 주고, **사용자가 고른 것만** 저장한다. 저장된 채널은 순위 가중치와, 그 채널의 이 도시 영상을 요청 5개 중 최대 2개로 넣는 데 쓴다(이미 분석된 것 먼저, 없으면 실시간 분석. 결정 0010 개정 2026-11-25).
 
 ## 2. 된 것 (테스트 338개 통과, 실제 API 호출 없음)
 
@@ -17,7 +17,7 @@
 | `shared/clients/taste.py`, `shared/prompts/taste.md` | 게이트웨이로 채널 라벨 제안. 30채널씩 나눠 호출, 형식 오류 1회 재요청 |
 | `shared/clients/bedrock.py` | 게이트웨이 호출을 `GatewayChat`으로 분리(해석과 공용). 해석 동작은 그대로 |
 | `shared/repos/users.py`, `caches.py` | Users 읽기·쓰기, 채널 라벨 캐시(`CHANNEL#id`/`TASTE`, 25일, 라벨 버전) |
-| `functions/collect/handler.py` | 로그인 작업이면 고른 채널의 업로드 중 이 도시 + 이미 분석된 영상만 앞에 |
+| `functions/collect/handler.py` | 로그인 작업이면 고른 채널의 이 도시 영상을 최대 2개 앞에(분석된 것 먼저, 없으면 새로 분석) |
 | 테스트 | `tests/unit/rules/test_taste.py`, `tests/unit/clients/test_youtube_taste.py`, `test_taste_labeler.py`, `tests/integration/test_api_me.py`, `test_collect.py` 뒷부분 |
 
 확인: `make test`, `make lint`.
@@ -27,7 +27,7 @@
 - 사용자는 JWT `sub`로만 정한다(`google:<sub>`). 본문의 `userId`는 400.
 - 유튜브 액세스 토큰, 채널 이름, 영상 제목, 좋아요 영상 ID는 **어느 테이블에도 저장하지 않는다**(`test_import_returns_candidates_and_stores_only_ids`).
 - Bedrock 라벨은 제안이다. 근거 문장이 채널 글에 그대로 없으면 UNKNOWN. 저장은 사용자 확인 뒤.
-- 개인 영상 때문에 Gemini를 새로 부르지 않는다. 분석된 적 없는 개인 영상은 넣지 않는다.
+- 개인 영상은 일반 영상 자리를 **대신한다**(요청당 최대 5개 유지). 이미 분석된 개인 영상을 먼저 쓰고, 없으면 새로 분석한다(2026-11-25 개정).
 - 채널 라벨은 채널 단위 캐시. 같은 채널은 사용자가 달라도 Bedrock 1회.
 - 구독자 수·좋아요 수는 점수에 쓰지 않는다.
 
