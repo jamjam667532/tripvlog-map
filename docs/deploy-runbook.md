@@ -94,6 +94,7 @@
 | `GEMINI_SEGMENT_SEC`, `GEMINI_FPS`, `GEMINI_RPM` | 190, 0.5, 14 | |
 | `GEMINI_MEDIA_RESOLUTION` | `MEDIA_RESOLUTION_LOW` | |
 | `BEDROCK_INTERPRETER_MODEL_ID` | `bedrock-haiku` | 게이트웨이 별칭 |
+| `EMBEDDING_MODEL_ID` | `bedrock-titan-embed-v2` | 게이트웨이 임베딩 별칭(결정 0011). collect·api_me가 쓴다 |
 | `STATE_MACHINE_ARN` | 만든 뒤 입력 | api_public만 |
 
 `create.sh`의 `GEMINI_MODEL=gemini-3.8-flash`는 오래된 값이다. 쓰지 않는다.

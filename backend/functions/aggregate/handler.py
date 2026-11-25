@@ -24,6 +24,7 @@ from shared.repos import Repos, analysis_key, live_result_key, result_key, with_
 from shared.rules.aggregation import aggregate_places, job_status, successful_channels
 from shared.rules.area import area_groups
 from shared.rules.evidence import choose_display_name
+from shared.rules.interests import place_theme_boosts
 from shared.rules.ranking import rank_places
 from shared.rules.replacement import choose_replacement
 from shared.rules.taste import profile_of
@@ -159,12 +160,18 @@ def build_result(job: JobItem, deps: Deps, now: datetime) -> JobResult:
     # 로그인 작업이면 취향 프로필로 순위를 개인화한다(결정 0010 개정): 구독 여행 채널이 다녀간
     # 장소에 가중치, 장소 스타일이 취향 비율과 겹치는 만큼 가산
     profile = profile_of(repos.users.get(job.user_id)) if job.user_id else None
+    # 결정 0011: 장소는 자기가 나온 영상의 관심사 점수를 물려받는다
+    boosts, themes = place_theme_boosts(
+        {a.place_id: {e.video_id for e in a.evidence} for a in aggregates},
+        {r.video_id: (r.theme, r.theme_score) for r in refs if r.theme},
+    )
     ranked = rank_places(
         aggregates,
         categories=categories,
         styles=job.request.styles,
         reference_channel_ids=profile.travel_channel_ids if profile else (),
         style_weights=profile.style_weights if profile else None,
+        theme_boosts=boosts,
     )
     coords = repos.coords.get_many([r.place_id for r in ranked], now=int(now.timestamp()))
     # TODO(decision 0004-4): 좌표가 만료된 장소는 지도 결과에서 빼고 순위를 다시 매긴다
@@ -202,6 +209,7 @@ def build_result(job: JobItem, deps: Deps, now: datetime) -> JobResult:
                     )
                     for e in agg.evidence
                 ],
+                themes=themes.get(r.place_id, []),
             )
         )
 

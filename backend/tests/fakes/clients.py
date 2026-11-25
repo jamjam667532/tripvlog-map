@@ -11,7 +11,7 @@ from shared.clients.youtube import LIST_UNITS, SEARCH_UNITS, VIDEOS_UNITS, Searc
 from shared.schemas.interpretation import InterpretationResult, link_to_observation
 from shared.schemas.observation import ObservationResult
 from shared.schemas.places import GeoPoint, PlaceHit
-from shared.schemas.taste import ChannelInfo, ChannelTasteLabel, ChannelVideo
+from shared.schemas.taste import ChannelInfo, ChannelTasteLabel, ChannelVideo, InterestProposal
 from shared.schemas.youtube import VideoMeta
 
 
@@ -173,3 +173,34 @@ class FakeStarter:
             raise ExternalApiError("stepfunctions", 500, "fake failure")
         self.started.append(job_id)
         return self.ARN_PREFIX + job_id
+
+
+class FakeEmbedder:
+    """키워드마다 한 축을 쓰는 결정적 임베딩. 같은 관심사 단어가 있으면 코사인이 높다."""
+
+    KEYWORDS = ("건축", "역사", "애니", "맛집", "카페")
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self._fail = fail
+        self.calls: list[list[str]] = []
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        self.calls.append(list(texts))
+        if self._fail:
+            raise ExternalApiError("llm-gateway", 500)
+        return [[1.0 if k in t else 0.0 for k in self.KEYWORDS] + [0.05] for t in texts]
+
+
+class FakeInterestExtractor:
+    def __init__(self, proposals: Sequence[InterestProposal], *, fail: bool = False) -> None:
+        self._proposals = list(proposals)
+        self._fail = fail
+        self.calls = 0
+
+    def extract(
+        self, channels: Sequence[ChannelInfo], liked: Sequence[ChannelVideo]
+    ) -> list[InterestProposal]:
+        self.calls += 1
+        if self._fail:
+            raise ExternalApiError("llm-gateway", 500)
+        return list(self._proposals)

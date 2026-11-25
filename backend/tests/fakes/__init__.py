@@ -5,7 +5,9 @@
 
 from tests.fakes.clients import (
     FakeBedrock,
+    FakeEmbedder,
     FakeGemini,
+    FakeInterestExtractor,
     FakePlaces,
     FakeStarter,
     FakeTasteLabeler,
@@ -15,7 +17,9 @@ from tests.fakes.clients import (
 
 __all__ = [
     "FakeBedrock",
+    "FakeEmbedder",
     "FakeGemini",
+    "FakeInterestExtractor",
     "FakePlaces",
     "FakeStarter",
     "FakeTasteLabeler",

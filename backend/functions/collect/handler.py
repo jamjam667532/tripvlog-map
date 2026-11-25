@@ -3,13 +3,16 @@
 입력 {jobId} → 출력 {jobId, videoRefs:[{jobId, videoId, channelId, analysisVersion}]}
 YouTube 검색 결과·메타데이터는 YoutubeCache(25일)를 먼저 본다. 조회수 등 지표는 쓰지 않는다.
 
-로그인 작업이면(결정 0010, 2026-11-25 개정) 취향 프로필(구독 여행 채널 + 스타일 비율)로
+로그인 작업이면 관심사(결정 0011)로 테마 검색을 더하고, 영상 임베딩 유사도로
+개인화 3 + 일반 2를 고른다.
+관심사가 없으면 취향 프로필(결정 0010 개정, 구독 여행 채널 + 스타일 비율)로
 영상을 고른다: 후보는 스타일 유사도 순, 구독 여행 채널의 이 도시 영상은 최대 2개 앞에 넣는다.
 이미 분석된 영상을 먼저 고르고, 없으면 새로 분석한다(실시간).
 개인 영상은 일반 영상 자리를 대신하므로 요청당 분석 영상 수(최대 5)는 늘지 않는다.
 게스트 작업은 그대로다.
 """
 
+import logging
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -17,9 +20,25 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from shared.clients.secrets import SECRET_YOUTUBE, get_secret
+from shared.clients.embeddings import Embedder, GatewayEmbedder
+from shared.clients.errors import ExternalApiError
+from shared.clients.secrets import (
+    SECRET_LLM_API_KEY,
+    SECRET_LLM_BASE_URL,
+    SECRET_YOUTUBE,
+    get_secret,
+)
 from shared.clients.youtube import SearchOrder, YouTubeClient, YouTubeDataApi
 from shared.repos import Repos, search_hash, with_metrics, with_refs
+from shared.rules.interests import (
+    SUBSCRIBED_THEME,
+    Themed,
+    active_interests,
+    compose,
+    theme_queries,
+    theme_score,
+    video_text,
+)
 from shared.rules.selection import eligible, merge_round_robin, select_videos
 from shared.rules.taste import (
     TasteProfile,
@@ -39,6 +58,8 @@ SEARCH_PLAN: tuple[tuple[str, SearchOrder], ...] = (
     ("{dest} 맛집", "relevance"),
     ("{dest} 여행", "date"),
 )
+logger = logging.getLogger(__name__)
+
 MAX_RESULTS = 25
 MAX_PERSONAL_CHANNELS = 5  # 업로드 목록 조회 상한(채널당 1 unit)
 PERSONAL_UPLOADS_PER_CHANNEL = 3  # 채널마다 이 도시 영상 중 최근 몇 개까지 후보로 보는가
@@ -51,6 +72,7 @@ class Deps:
     repos: Repos
     youtube: YouTubeClient
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+    embedder: Embedder | None = None  # 결정 0011: 관심사 유사도. 없으면 관심사 단계를 건너뛴다
 
 
 def published_after(now: datetime) -> datetime:
@@ -121,6 +143,28 @@ def _personal_videos(
     return sorted(picked, key=lambda m: not analyzed(m))
 
 
+def _embeddings(deps: Deps, metas: list[VideoMeta], now: int) -> dict[str, list[float]]:
+    """영상 임베딩. 캐시(25일)에 없는 것만 게이트웨이로. 실패하면 캐시에 있는 것만 쓴다."""
+    if deps.embedder is None or not metas:
+        return {}
+    model = deps.settings.embedding_model_id or "default"
+    cache = deps.repos.youtube_cache
+    found = cache.get_embeddings([m.video_id for m in metas], model=model, now=now)
+    missing = [m for m in metas if m.video_id not in found]
+    if missing:
+        try:
+            vectors = deps.embedder.embed([video_text(m) for m in missing])
+        except ExternalApiError:
+            logger.exception("video embedding failed")
+            return found
+        for m, vec in zip(missing, vectors, strict=True):
+            cache.put_embedding(
+                m.video_id, vec, model=model, now=now, ttl_days=deps.settings.youtube_cache_ttl_days
+            )
+            found[m.video_id] = vec
+    return found
+
+
 def _output(job: JobItem) -> CollectOutput:
     return CollectOutput(
         job_id=job.job_id,
@@ -152,9 +196,14 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
     units_before = int(getattr(deps.youtube, "units_used", 0))
     results = [_search(deps, q.format(dest=dest), order, after, now) for q, order in SEARCH_PLAN]
     ids = merge_round_robin(results)
-    metas = _metas(deps, ids, now)
-    # 로그인 작업이면 취향 프로필(자동 분석 또는 사용자 수정)로 영상을 고른다(결정 0010 개정)
-    profile = profile_of(deps.repos.users.get(job.user_id)) if job.user_id else None
+    # 로그인 작업이면 취향 프로필(결정 0010 개정)과 관심사(결정 0011)로 고른다
+    user = deps.repos.users.get(job.user_id) if job.user_id else None
+    profile = profile_of(user)
+    interests = active_interests(user) if deps.embedder is not None else []
+    theme_ids = merge_round_robin(
+        [_search(deps, q, "relevance", after, now) for q in theme_queries(interests, dest)]
+    )
+    metas = _metas(deps, list(dict.fromkeys([*ids, *theme_ids])), now)
     picked = select_videos(
         (metas[v] for v in ids if v in metas),
         now=now_dt,
@@ -164,17 +213,42 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
         max_spares=s.spare_videos_per_job,
         taste_score=(lambda m: video_taste_score(m, profile)) if profile else None,
     )
-    if profile is not None:
-        personal = _personal_videos(deps, profile, dest, now_dt, now)
-        if personal:
-            picked = personal_first(
-                picked,
-                personal,
-                max_videos=s.max_videos_per_job,
-                max_spares=s.spare_videos_per_job,
-            )
+    personal = _personal_videos(deps, profile, dest, now_dt, now) if profile else []
+    themes: dict[str, tuple[str, float | None]] = {}
+    if interests:
+        pool = [
+            metas[v]
+            for v in dict.fromkeys([*theme_ids, *ids])
+            if v in metas and eligible(metas[v], now_dt, dest)
+        ]
+        vectors = _embeddings(deps, pool, now)
+        themed = [
+            Themed(m, label, score)
+            for m in pool
+            if m.video_id in vectors
+            for label, score in [theme_score(vectors[m.video_id], interests)]
+            if label is not None
+        ]
+        picked, themes = compose(
+            picked,
+            personal,
+            themed,
+            max_videos=s.max_videos_per_job,
+            max_spares=s.spare_videos_per_job,
+        )
+    elif personal:
+        picked = personal_first(
+            picked, personal, max_videos=s.max_videos_per_job, max_spares=s.spare_videos_per_job
+        )
+        themes = {m.video_id: (SUBSCRIBED_THEME, None) for m in picked.chosen if m in personal}
     refs = [
-        VideoRef(video_id=m.video_id, channel_id=m.channel_id, analysis_version=s.analysis_version)
+        VideoRef(
+            video_id=m.video_id,
+            channel_id=m.channel_id,
+            analysis_version=s.analysis_version,
+            theme=themes[m.video_id][0] if m.video_id in themes else None,
+            theme_score=themes[m.video_id][1] if m.video_id in themes else None,
+        )
         for m in picked.chosen
     ]
     spares = [
@@ -193,10 +267,20 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
 @lru_cache(maxsize=1)
 def _deps() -> Deps:
     settings = Settings.from_env()
+    embedder = (
+        GatewayEmbedder(
+            settings.embedding_model_id,
+            api_key=get_secret(SECRET_LLM_API_KEY),
+            base_url=get_secret(SECRET_LLM_BASE_URL),
+        )
+        if settings.embedding_model_id
+        else None
+    )
     return Deps(
         settings=settings,
         repos=Repos.from_settings(settings),
         youtube=YouTubeDataApi(get_secret(SECRET_YOUTUBE)),
+        embedder=embedder,
     )
 
 

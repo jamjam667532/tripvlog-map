@@ -11,6 +11,7 @@
     "CONFIG_KEY": "keys.json",
     "ANALYSIS_VERSION": "v4-seg190",
     "GEMINI_MODELS": "gemini-3.5-flash-lite,gemini-3.1-flash-lite",
-    "BEDROCK_INTERPRETER_MODEL_ID": "bedrock-haiku"
+    "BEDROCK_INTERPRETER_MODEL_ID": "bedrock-haiku",
+    "EMBEDDING_MODEL_ID": "bedrock-titan-embed-v2"
   }
 }

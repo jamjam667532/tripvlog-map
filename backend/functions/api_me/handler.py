@@ -22,6 +22,7 @@ import base64
 import json
 import logging
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
@@ -31,7 +32,9 @@ from pydantic import BaseModel, ValidationError
 
 from functions.job_api import Unauthorized, user_id_of
 from shared.clients.bedrock import GatewayChat
+from shared.clients.embeddings import Embedder, GatewayEmbedder
 from shared.clients.errors import ExternalApiError
+from shared.clients.interests import GatewayInterestExtractor, InterestExtractor
 from shared.clients.secrets import (
     SECRET_LLM_API_KEY,
     SECRET_LLM_BASE_URL,
@@ -46,6 +49,7 @@ from shared.clients.youtube import (
     YouTubeUserClient,
 )
 from shared.repos import Repos
+from shared.rules.interests import interest_text, validate_interests
 from shared.rules.taste import (
     accept_label,
     auto_travel_channels,
@@ -53,10 +57,12 @@ from shared.rules.taste import (
     travel_candidates,
 )
 from shared.schemas.api import ErrorBody, ErrorResponse
-from shared.schemas.items import UserItem, UserPreferences, YoutubeLink
+from shared.schemas.items import UserInterest, UserItem, UserPreferences, YoutubeLink
 from shared.schemas.taste import (
     ChannelInfo,
     ChannelTasteLabel,
+    ChannelVideo,
+    InterestView,
     MeResponse,
     TasteChannelCandidate,
     YoutubeImportResponse,
@@ -68,6 +74,7 @@ logger = logging.getLogger(__name__)
 ACCESS_TOKEN_HEADER = "x-google-access-token"
 MAX_CHANNELS_CHECKED = 250  # 구독 200 + 좋아요 영상의 채널
 MAX_TRAVEL_CHANNELS = 50  # 취향 프로필에 담는 구독 여행 채널 상한
+MAX_INTEREST_CHANNELS = 200  # 관심사 추출에 보내는 구독 채널 상한(결정 0011)
 
 
 @dataclass(frozen=True)
@@ -77,6 +84,8 @@ class Deps:
     youtube: YouTubeClient
     youtube_for: Callable[[str], YouTubeUserClient]  # 액세스 토큰 → 사용자 조회 클라이언트
     labeler: TasteLabeler
+    extractor: InterestExtractor  # 결정 0011: 구독·좋아요 전체에서 관심사 제안
+    embedder: Embedder
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
 
 
@@ -99,6 +108,23 @@ def _body(event: dict[str, Any]) -> Any:
     return json.loads(raw or "{}")
 
 
+def _interest_views(
+    interests: list[UserInterest], hidden: list[str], titles: dict[str, str] | None = None
+) -> list[InterestView]:
+    """화면용 관심사. 근거 제목은 연결 직후 응답에만 있다(저장하지 않으므로 이후 조회에는 없다)."""
+    titles = titles or {}
+    return [
+        InterestView(
+            label=i.label,
+            weight=i.weight,
+            search_terms=list(i.search_terms),
+            evidence_titles=[titles[e] for e in i.evidence_ids if e in titles][:3],
+            hidden=i.label in hidden,
+        )
+        for i in interests
+    ]
+
+
 def _me(user: UserItem) -> MeResponse:
     yt = user.youtube
     return MeResponse(
@@ -108,6 +134,9 @@ def _me(user: UserItem) -> MeResponse:
         resync_due_at=yt.resync_due_at if yt else None,
         travel_channel_ids=list(yt.travel_channel_ids) if yt else [],
         style_profile_candidate=dict(yt.style_profile_candidate) if yt else {},
+        interests=_interest_views(list(yt.interests), user.preferences.hidden_interests)
+        if yt
+        else [],
     )
 
 
@@ -148,6 +177,33 @@ def delete_connection(event: dict[str, Any], user_id: str, deps: Deps) -> dict[s
     if deps.repos.users.get(user_id) is not None:
         deps.repos.users.remove_youtube(user_id)
     return _response(200, _me(deps.repos.users.get_or_new(user_id)))
+
+
+def _interests(
+    infos: list[ChannelInfo], liked: list[ChannelVideo], deps: Deps
+) -> list[UserInterest]:
+    """관심사: Bedrock 제안 → 근거 검증(입력에 있는 ID만) → 임베딩. 실패하면 빈 목록으로 계속."""
+    try:
+        proposals = deps.extractor.extract(infos[:MAX_INTEREST_CHANNELS], liked)
+        valid = validate_interests(
+            proposals, {c.channel_id for c in infos} | {v.video_id for v in liked}
+        )
+        if not valid:
+            return []
+        vectors = deps.embedder.embed([interest_text(i.label, i.search_terms) for i in valid])
+    except Exception:
+        logger.exception("interest extraction failed")  # 채널 정보·토큰은 남기지 않는다
+        return []
+    return [
+        UserInterest(
+            label=i.label,
+            weight=i.weight,
+            search_terms=i.search_terms,
+            evidence_ids=i.evidence_ids,
+            embedding=vec,
+        )
+        for i, vec in zip(valid, vectors, strict=True)
+    ]
 
 
 def _labels(candidates: list[ChannelInfo], deps: Deps, now: int) -> dict[str, ChannelTasteLabel]:
@@ -192,7 +248,11 @@ def import_youtube(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str,
     channel_ids = list(dict.fromkeys([*subscriptions, *(v.channel_id for v in liked)]))
     infos = deps.youtube.channels(channel_ids[:MAX_CHANNELS_CHECKED])
     candidates = travel_candidates(infos, liked)
-    labels = _labels(candidates, deps, now)
+    # API Gateway 30초 제한: 채널 라벨과 관심사 추출을 동시에 부른다
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        labels_job = pool.submit(_labels, candidates, deps, now)
+        interests_job = pool.submit(_interests, infos, liked, deps)
+        labels, interests = labels_job.result(), interests_job.result()
 
     # 결정 0010 개정: 확인을 기다리지 않고 자동으로 취향 프로필을 만든다(화면에서 고칠 수 있다)
     travel = auto_travel_channels(labels, liked)[:MAX_TRAVEL_CHANNELS]
@@ -215,6 +275,7 @@ def import_youtube(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str,
                 )
             )
 
+    titles = {c.channel_id: c.title for c in infos} | {v.video_id: v.title for v in liked}
     user = deps.repos.users.get_or_new(user_id)
     link = YoutubeLink(
         linked=True,
@@ -223,6 +284,7 @@ def import_youtube(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str,
         travel_channel_ids=travel,  # 자동 취향 프로필: 구독 여행 채널
         liked_travel_video_ids=[],  # 결정 0010-3: 저장하지 않는다
         style_profile_candidate=profile,  # 자동 취향 프로필: 스타일 비율
+        interests=interests,  # 결정 0011: 관심사(이름·비중·검색어·근거 ID·벡터)
     )
     deps.repos.users.put(user.model_copy(update={"youtube": link}))
     return _response(
@@ -230,6 +292,7 @@ def import_youtube(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str,
         YoutubeImportResponse(
             channels=shown,
             style_profile=profile,
+            interests=_interest_views(interests, user.preferences.hidden_interests, titles),
             subscriptions_checked=len(subscriptions),
             liked_checked=len(liked),
         ),
@@ -274,6 +337,12 @@ def _deps() -> Deps:
         youtube=YouTubeDataApi(get_secret(SECRET_YOUTUBE)),
         youtube_for=YouTubeUserApi,
         labeler=GatewayTasteLabeler(chat),
+        extractor=GatewayInterestExtractor(chat),
+        embedder=GatewayEmbedder(
+            require(s.embedding_model_id, "EMBEDDING_MODEL_ID"),
+            api_key=get_secret(SECRET_LLM_API_KEY),
+            base_url=get_secret(SECRET_LLM_BASE_URL),
+        ),
     )
 
 

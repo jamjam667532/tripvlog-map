@@ -14,6 +14,7 @@ from shared.repos.dynamo import batch_get, from_item, is_conditional_failure, to
 from shared.schemas.items import (
     ChannelTasteCacheItem,
     CoordCacheItem,
+    VideoEmbeddingCacheItem,
     YoutubeQuotaItem,
     YoutubeSearchCacheItem,
     YoutubeVideoCacheItem,
@@ -107,6 +108,31 @@ class YoutubeCacheRepo:
             duration_sec=meta.duration_sec,
             privacy_status=meta.privacy_status,
             published_at=meta.published_at,
+            expires_at=now + ttl_days * DAY_SEC,
+        )
+        self._table.put_item(Item=to_item(item))
+
+    def get_embeddings(
+        self, video_ids: Collection[str], *, model: str, now: int
+    ) -> dict[str, list[float]]:
+        """영상 임베딩 캐시(결정 0011). 만료됐거나 모델이 다르면 없는 것으로 본다."""
+        if not video_ids:
+            return {}
+        keys = [{"pk": f"VIDEO#{v}", "sk": f"EMBED#{model}"} for v in sorted(set(video_ids))]
+        found: dict[str, list[float]] = {}
+        for raw in batch_get(self._resource, self._table_name, keys):
+            item = VideoEmbeddingCacheItem.model_validate(from_item(raw))
+            if item.expires_at > now:
+                found[item.pk.removeprefix("VIDEO#")] = list(item.embedding)
+        return found
+
+    def put_embedding(
+        self, video_id: str, vector: Sequence[float], *, model: str, now: int, ttl_days: int
+    ) -> None:
+        item = VideoEmbeddingCacheItem(
+            pk=f"VIDEO#{video_id}",
+            sk=f"EMBED#{model}",
+            embedding=list(vector),
             expires_at=now + ttl_days * DAY_SEC,
         )
         self._table.put_item(Item=to_item(item))

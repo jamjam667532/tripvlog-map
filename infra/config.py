@@ -7,7 +7,7 @@ REGION = "us-east-1"  # TODO(verify): 학교 계정에서 허용된 US 리전
 # TODO(verify): Claude Haiku 4.5 모델 ID 또는 추론 프로파일(us. 접두사)
 BEDROCK_INTERPRETER_MODEL_ID = "..."
 BEDROCK_COMPARE_MODEL_ID = (
-    "bedrock-gpt-5.6-luna"  # 학교 게이트웨이 별칭. M7 비교 실험에만 (결정 0007-1)
+    "bedrock-gpt-6-luna"  # 학교 게이트웨이 별칭(2026-11-25 /models 확인). M7 비교 실험에만
 )
 GEMINI_MODEL = "..."  # TODO(verify): 무료 티어에서 YouTube URL 입력을 지원하는 Flash 계열
 # TODO(verify): LOW는 토큰을 줄이지만 간판·자막 인식이 떨어질 수 있다. M7에서 LOW/MEDIUM 비교

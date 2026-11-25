@@ -5,6 +5,7 @@
      + 선호 스타일 일치 x STYLE_WEIGHT
      + 참고 채널 방문 수 x REFERENCE_WEIGHT
      + 취향 스타일 비율과 겹치는 몫 x TASTE_WEIGHT (로그인 작업, 결정 0010 개정)
+     + 이 장소가 나온 영상의 관심사 점수 x THEME_WEIGHT (로그인 작업, 결정 0011)
 """
 
 from collections.abc import Collection, Mapping, Sequence
@@ -18,6 +19,7 @@ POSITIVE_WEIGHT = 0.5
 STYLE_WEIGHT = 1.0
 REFERENCE_WEIGHT = 1.0
 TASTE_WEIGHT = 1.0
+THEME_WEIGHT = 2.0  # 관심사 점수는 0.25~0.6 정도라 채널 1곳 방문과 비슷한 크기가 되게
 
 # 결정 0003-5: 스타일 → 영상에서 본 장소 분류. 가성비는 가격 긍정, 쇼핑은 아직 대응 분류 없음
 STYLE_CATEGORIES: Mapping[Style, Category] = {
@@ -53,6 +55,7 @@ def score(
     styles: Collection[Style] = (),
     reference_channel_ids: Collection[str] = (),
     style_weights: Mapping[Style, float] | None = None,
+    theme_boost: float = 0.0,
 ) -> float:
     s = float(agg.channels_visited)
     s += POSITIVE_WEIGHT * agg.overall.positive
@@ -61,6 +64,7 @@ def score(
     s += REFERENCE_WEIGHT * len(agg.visited_channel_ids & set(reference_channel_ids))
     if style_weights:
         s += TASTE_WEIGHT * sum(style_weights.get(x, 0.0) for x in matched_styles(agg, category))
+    s += THEME_WEIGHT * theme_boost
     return s
 
 
@@ -71,6 +75,7 @@ def rank_places(
     styles: Collection[Style] = (),
     reference_channel_ids: Collection[str] = (),
     style_weights: Mapping[Style, float] | None = None,
+    theme_boosts: Mapping[str, float] | None = None,
 ) -> list[Ranked]:
     """방문 채널이 없는(언급만 된) 장소는 순위에서 뺀다. 동점은 방문 채널 수, placeId 순."""
     scored = [
@@ -81,6 +86,7 @@ def rank_places(
                 styles=styles,
                 reference_channel_ids=reference_channel_ids,
                 style_weights=style_weights,
+                theme_boost=(theme_boosts or {}).get(a.place_id, 0.0),
             ),
             a,
         )

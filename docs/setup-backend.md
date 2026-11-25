@@ -67,6 +67,7 @@ zip 만들기: `bash infra/deploy/build_zip.sh` → `dist/backend.zip` (약 10MB
 | `ANALYSIS_VERSION` | `v4-seg190` |
 | `GEMINI_MODELS` | `gemini-3.5-flash-lite,gemini-3.1-flash-lite` |
 | `BEDROCK_INTERPRETER_MODEL_ID` | `bedrock-haiku` |
+| `EMBEDDING_MODEL_ID` | `bedrock-titan-embed-v2` |
 
 `sgu-clicktotrip-api-public`에는 하나 더 넣는다. Step Functions를 만들기 전까지는 임시 값이다.
 

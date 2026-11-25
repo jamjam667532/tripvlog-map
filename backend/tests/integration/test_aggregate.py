@@ -246,3 +246,25 @@ def test_guest_job_ranking_ignores_reference_channels(
     _, s3 = aws
     body = json.loads(s3.get_object(Bucket=settings.bucket, Key=out.result_s3_key)["Body"].read())
     assert [p["placeId"] for p in body["places"]] == ["P_a", "P_b"]
+
+
+def test_places_inherit_video_theme_score_and_names(
+    repos: Repos, settings: Settings, aws: tuple[Any, Any]
+) -> None:
+    """결정 0011: 관심사 영상에서 나온 장소가 위로, 결과에 관심사 이름."""
+    job = guest_job(guestAccessHash=None, userId="google:u2")
+    repos.jobs.create(job)
+    refs = [
+        ref("v1", "c1"),
+        # 작업 스타일이 "맛집"이라 식당 P_a는 스타일 점수 1을 받는다. 관심사 0.8 x 2가 그보다 크다
+        ref("v2", "c2").model_copy(update={"theme": "건축", "theme_score": 0.8}),
+    ]
+    job = repos.jobs.mutate(str(job.job_id), lambda j: with_refs(j, refs), NOW)
+    _place(repos, "P_a", "가게A", "RESTAURANT", 34.66, 135.50)
+    _place(repos, "P_b", "미술관", "ATTRACTION", 34.67, 135.51)
+    repos.places.put_evidence(evidence("P_a", "c1", "v1", 10))
+    repos.places.put_evidence(evidence("P_b", "c2", "v2", 20))
+    out = _aggregate(repos, settings, job)
+    _, s3 = aws
+    body = json.loads(s3.get_object(Bucket=settings.bucket, Key=out.result_s3_key)["Body"].read())
+    assert [(p["placeId"], p["themes"]) for p in body["places"]] == [("P_b", ["건축"]), ("P_a", [])]

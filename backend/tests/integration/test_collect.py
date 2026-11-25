@@ -6,11 +6,11 @@ from datetime import timedelta
 from functions.collect.handler import Deps, run
 from shared.repos import Repos
 from shared.schemas.events import JobInput
-from shared.schemas.items import UserItem, UserPreferences, YoutubeLink
+from shared.schemas.items import UserInterest, UserItem, UserPreferences, YoutubeLink
 from shared.schemas.taste import ChannelVideo
 from shared.schemas.youtube import VideoMeta
 from shared.settings import Settings
-from tests.fakes import FakeYouTube
+from tests.fakes import FakeEmbedder, FakeYouTube
 from tests.integration.factories import NOW, NOW_EPOCH, VERSION, guest_job
 
 
@@ -225,3 +225,97 @@ def test_auto_profile_from_youtube_is_used_without_any_user_edit(
     assert ids[0] == "p1"  # 구독 여행 채널 영상(새로 분석)
     assert ids[1] == "v2"  # 일반 후보 중 맛집 영상이 유사도 1순위
     assert youtube.upload_calls == ["pc1"]
+
+
+# ---------- 관심사 기반 테마 추천 (결정 0011) ----------
+
+ARCH_VEC = [1.0, 0.0, 0.0, 0.0, 0.0, 0.05]  # FakeEmbedder 축: 건축·역사·애니·맛집·카페 + 상수
+
+
+def _interest_user(repos: Repos, *, travel: list[str] | None = None) -> str:
+    job = guest_job(guestAccessHash=None, userId=USER)
+    repos.jobs.create(job)
+    link = YoutubeLink.model_validate(
+        {
+            "linked": True,
+            "syncedAt": NOW.isoformat(),
+            "resyncDueAt": NOW.isoformat(),
+            "travelChannelIds": travel or [],
+        }
+    ).model_copy(
+        update={
+            "interests": [
+                UserInterest(
+                    label="건축",
+                    weight=1.0,
+                    search_terms=["건축 투어"],
+                    evidence_ids=["c"],
+                    embedding=ARCH_VEC,
+                )
+            ]
+        }
+    )
+    repos.users.put(UserItem(user_id=USER, youtube=link))
+    return str(job.job_id)
+
+
+THEME = [
+    meta("a1", "ac1", title="오사카 건축 투어 안도 다다오"),
+    meta("a2", "ac2", title="오사카 건축 여행 브이로그"),
+    meta("a3", "ac3", title="오사카 건축 산책"),
+    meta("a4", "ac4", title="오사카 건축 명소"),
+]
+
+
+def test_interest_job_adds_theme_search_and_picks_three_plus_two(
+    repos: Repos, settings: Settings
+) -> None:
+    job_id = _interest_user(repos)
+    search = {**SEARCH, "오사카 건축 투어": ["a1", "a2", "a3", "a4"]}
+    youtube = FakeYouTube(search, METAS + THEME)
+    embedder = FakeEmbedder()
+    deps = Deps(
+        settings=settings, repos=repos, youtube=youtube, clock=lambda: NOW, embedder=embedder
+    )
+    out = run(JobInput.model_validate({"jobId": job_id}), deps)
+
+    assert ("오사카 건축 투어", "relevance") in youtube.search_calls  # 테마 검색
+    job = repos.jobs.require(job_id)
+    refs = job.video_refs
+    themed = [r for r in refs if r.theme == "건축"]
+    assert len(themed) == 3 and all(r.theme_score and r.theme_score >= 0.25 for r in themed)
+    general = [r for r in refs if r.theme is None]
+    assert len(general) == 2 and len(refs) == settings.max_videos_per_job
+    assert len({r.channel_id for r in refs}) == len(refs)  # 채널당 1개
+    assert [r.video_id for r in out.video_refs][:3] == [r.video_id for r in themed]
+
+    # 두 번째 작업은 영상 임베딩 캐시를 쓴다
+    calls_before = sum(len(c) for c in embedder.calls)
+    run(JobInput.model_validate({"jobId": _interest_user(repos)}), deps)
+    assert sum(len(c) for c in embedder.calls) == calls_before
+
+
+def test_embedding_failure_falls_back_to_general(repos: Repos, settings: Settings) -> None:
+    job_id = _interest_user(repos)
+    youtube = FakeYouTube({**SEARCH, "오사카 건축 투어": ["a1"]}, METAS + THEME)
+    deps = Deps(
+        settings=settings,
+        repos=repos,
+        youtube=youtube,
+        clock=lambda: NOW,
+        embedder=FakeEmbedder(fail=True),
+    )
+    run(JobInput.model_validate({"jobId": job_id}), deps)
+    refs = repos.jobs.require(job_id).video_refs
+    assert refs and all(r.theme is None for r in refs)
+
+
+def test_guest_job_never_runs_theme_search(repos: Repos, settings: Settings) -> None:
+    job = guest_job()
+    repos.jobs.create(job)
+    youtube = FakeYouTube(SEARCH, METAS)
+    deps = Deps(
+        settings=settings, repos=repos, youtube=youtube, clock=lambda: NOW, embedder=FakeEmbedder()
+    )
+    run(JobInput(job_id=job.job_id), deps)
+    assert len(youtube.search_calls) == 3

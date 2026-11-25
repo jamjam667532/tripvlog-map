@@ -8,9 +8,15 @@ import pytest
 from functions.api_me.handler import Deps, run
 from shared.clients.taste import LABEL_VERSION
 from shared.repos import Repos
-from shared.schemas.taste import ChannelInfo, ChannelTasteLabel, ChannelVideo
+from shared.schemas.taste import ChannelInfo, ChannelTasteLabel, ChannelVideo, InterestProposal
 from shared.settings import Settings
-from tests.fakes import FakeTasteLabeler, FakeYouTube, FakeYouTubeUser
+from tests.fakes import (
+    FakeEmbedder,
+    FakeInterestExtractor,
+    FakeTasteLabeler,
+    FakeYouTube,
+    FakeYouTubeUser,
+)
 from tests.integration.factories import NOW, NOW_EPOCH
 
 TOKEN = "ya29.user-access-token"
@@ -63,9 +69,27 @@ def labeler() -> FakeTasteLabeler:
     return FakeTasteLabeler(LABELS)
 
 
+PROPOSALS = [
+    InterestProposal(
+        label="건축", evidence_ids=["trip", "l1", "made-up"], search_terms=["건축 투어"]
+    ),
+    InterestProposal(label="맛집", evidence_ids=["food"], search_terms=["맛집 투어"]),
+    InterestProposal(label="가짜", evidence_ids=["nope"], search_terms=["x"]),
+]
+
+
+@pytest.fixture
+def extractor() -> FakeInterestExtractor:
+    return FakeInterestExtractor(PROPOSALS)
+
+
 @pytest.fixture
 def deps(
-    repos: Repos, settings: Settings, user_api: FakeYouTubeUser, labeler: FakeTasteLabeler
+    repos: Repos,
+    settings: Settings,
+    user_api: FakeYouTubeUser,
+    labeler: FakeTasteLabeler,
+    extractor: FakeInterestExtractor,
 ) -> Deps:
     return Deps(
         settings=settings,
@@ -73,6 +97,8 @@ def deps(
         youtube=FakeYouTube({}, [], channels=CHANNELS),
         youtube_for=user_api.for_token,
         labeler=labeler,
+        extractor=extractor,
+        embedder=FakeEmbedder(),
         clock=lambda: NOW,
     )
 
@@ -131,6 +157,8 @@ def test_labeler_failure_still_returns_unknown_candidates(
         youtube=FakeYouTube({}, [], channels=CHANNELS),
         youtube_for=user_api.for_token,
         labeler=FakeTasteLabeler({}, fail=True),
+        extractor=FakeInterestExtractor([], fail=True),
+        embedder=FakeEmbedder(),
         clock=lambda: NOW,
     )
     status, body = call(deps, event("POST /me/youtube/import", token=TOKEN))
@@ -150,6 +178,8 @@ def test_rejected_youtube_token_is_401(repos: Repos, settings: Settings) -> None
         youtube=FakeYouTube({}, []),
         youtube_for=FakeYouTubeUser(reject=True).for_token,
         labeler=FakeTasteLabeler({}),
+        extractor=FakeInterestExtractor([]),
+        embedder=FakeEmbedder(),
         clock=lambda: NOW,
     )
     status, body = call(deps, event("POST /me/youtube/import", token=TOKEN))
@@ -197,3 +227,44 @@ def test_delete_connection_removes_youtube_but_keeps_preferences(deps: Deps, rep
 def test_get_preferences_for_new_user(deps: Deps) -> None:
     status, body = call(deps, event("GET /me/preferences"))
     assert status == 200 and body["youtubeLinked"] is False
+
+
+def test_import_extracts_interests_with_evidence_and_vectors(deps: Deps, repos: Repos) -> None:
+    """결정 0011: 구독·좋아요 전체에서 관심사. 근거가 입력에 있는 것만, 비중은 근거 수."""
+    status, body = call(deps, event("POST /me/youtube/import", token=TOKEN))
+    assert status == 200
+    views = {i["label"]: i for i in body["interests"]}
+    assert set(views) == {"건축", "맛집"}  # 근거 없는 "가짜"는 버린다
+    assert views["건축"]["weight"] == 0.67 and views["맛집"]["weight"] == 0.33
+    assert views["건축"]["evidenceTitles"] == ["주말 해외여행", "오사카 맛집 투어"]
+    user = repos.users.get("google:" + SUB)
+    assert user is not None and user.youtube is not None
+    saved = {i.label: i for i in user.youtube.interests}
+    assert saved["건축"].evidence_ids == ["trip", "l1"]  # 입력에 없는 ID는 빠진다
+    assert len(saved["건축"].embedding) == len(FakeEmbedder.KEYWORDS) + 1
+
+
+def test_interest_failure_does_not_block_import(
+    repos: Repos, settings: Settings, user_api: FakeYouTubeUser
+) -> None:
+    deps = Deps(
+        settings=settings,
+        repos=repos,
+        youtube=FakeYouTube({}, [], channels=CHANNELS),
+        youtube_for=user_api.for_token,
+        labeler=FakeTasteLabeler(LABELS),
+        extractor=FakeInterestExtractor([], fail=True),
+        embedder=FakeEmbedder(),
+        clock=lambda: NOW,
+    )
+    status, body = call(deps, event("POST /me/youtube/import", token=TOKEN))
+    assert status == 200 and body["interests"] == [] and body["channels"]
+
+
+def test_hidden_interest_is_marked_in_preferences(deps: Deps) -> None:
+    call(deps, event("POST /me/youtube/import", token=TOKEN))
+    call(deps, event("PATCH /me/preferences", body={"hiddenInterests": ["맛집"]}))
+    _, body = call(deps, event("GET /me/preferences"))
+    hidden = {i["label"]: i["hidden"] for i in body["interests"]}
+    assert hidden == {"건축": False, "맛집": True}
+    assert all(i["evidenceTitles"] == [] for i in body["interests"])  # 제목은 저장하지 않는다
