@@ -9,7 +9,7 @@
 """
 
 import unicodedata
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -82,7 +82,10 @@ def select_videos(
     destination: str | None = None,
     max_videos: int,
     max_spares: int,
+    taste_score: Callable[[VideoMeta], float] | None = None,
 ) -> Selection:
+    """taste_score가 있으면(로그인 작업) 채널마다 점수가 가장 높은 영상, 채널끼리도 점수 높은 순.
+    없으면(게스트) 선호 스타일 일치 여부로 고른다."""
     by_channel: dict[str, list[VideoMeta]] = {}
     seen: set[str] = set()
     for meta in candidates:
@@ -91,6 +94,13 @@ def select_videos(
         seen.add(meta.video_id)
         by_channel.setdefault(meta.channel_id, []).append(meta)
 
+    if taste_score is not None:
+        # 같은 점수면 검색 순서가 앞선 영상(max·sort 모두 안정)
+        picks = [max(videos, key=taste_score) for videos in by_channel.values()]
+        picks.sort(key=lambda m: -taste_score(m))
+        return Selection(
+            chosen=picks[:max_videos], spares=picks[max_videos : max_videos + max_spares]
+        )
     picks = [
         next((m for m in videos if _prefers(m, preferred_styles)), videos[0])
         for videos in by_channel.values()

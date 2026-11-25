@@ -52,6 +52,7 @@ class TasteChannelCandidate(CamelModel):
     travel: TravelLabel
     styles: list[Style] = Field(default_factory=list)
     evidence: str | None = None
+    applied: bool = False  # 자동 취향 프로필에 들어갔는가(결정 0010 개정)
 
 
 class YoutubeImportResponse(CamelModel):

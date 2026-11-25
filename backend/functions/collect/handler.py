@@ -3,8 +3,9 @@
 입력 {jobId} → 출력 {jobId, videoRefs:[{jobId, videoId, channelId, analysisVersion}]}
 YouTube 검색 결과·메타데이터는 YoutubeCache(25일)를 먼저 본다. 조회수 등 지표는 쓰지 않는다.
 
-로그인 작업이면(결정 0010, 2026-11-25 개정) 사용자가 확인한 참고 채널의 이 도시 영상을
-최대 2개 앞에 넣는다. 이미 분석된 영상을 먼저 고르고, 없으면 새로 분석한다(실시간).
+로그인 작업이면(결정 0010, 2026-11-25 개정) 취향 프로필(구독 여행 채널 + 스타일 비율)로
+영상을 고른다: 후보는 스타일 유사도 순, 구독 여행 채널의 이 도시 영상은 최대 2개 앞에 넣는다.
+이미 분석된 영상을 먼저 고르고, 없으면 새로 분석한다(실시간).
 개인 영상은 일반 영상 자리를 대신하므로 요청당 분석 영상 수(최대 5)는 늘지 않는다.
 게스트 작업은 그대로다.
 """
@@ -20,7 +21,13 @@ from shared.clients.secrets import SECRET_YOUTUBE, get_secret
 from shared.clients.youtube import SearchOrder, YouTubeClient, YouTubeDataApi
 from shared.repos import Repos, search_hash, with_metrics, with_refs
 from shared.rules.selection import eligible, merge_round_robin, select_videos
-from shared.rules.taste import destination_uploads, personal_first
+from shared.rules.taste import (
+    TasteProfile,
+    destination_uploads,
+    personal_first,
+    profile_of,
+    video_taste_score,
+)
 from shared.schemas.events import CollectOutput, JobInput, VideoTask
 from shared.schemas.items import JobItem, SpareVideo, VideoRef
 from shared.schemas.youtube import VideoMeta
@@ -91,15 +98,12 @@ def _metas(deps: Deps, video_ids: list[str], now: int) -> dict[str, VideoMeta]:
 
 
 def _personal_videos(
-    deps: Deps, user_id: str, destination: str, now_dt: datetime, now: int
+    deps: Deps, profile: TasteProfile, destination: str, now_dt: datetime, now: int
 ) -> list[VideoMeta]:
-    """사용자가 확인한 채널의 이 도시 영상. 이미 분석된(DONE) 영상이 앞, 나머지는 채널·최신 순."""
-    user = deps.repos.users.get(user_id)
-    if user is None:
-        return []
+    """구독 여행 채널의 이 도시 영상. 이미 분석된(DONE) 영상이 앞, 나머지는 채널·최신 순."""
     version = deps.settings.analysis_version
     candidates: list[str] = []
-    for channel_id in user.preferences.reference_channel_ids[:MAX_PERSONAL_CHANNELS]:
+    for channel_id in profile.travel_channel_ids[:MAX_PERSONAL_CHANNELS]:
         uploads = destination_uploads(deps.youtube.uploads(channel_id), destination)
         candidates.extend(v.video_id for v in uploads[:PERSONAL_UPLOADS_PER_CHANNEL])
     if not candidates:
@@ -149,6 +153,8 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
     results = [_search(deps, q.format(dest=dest), order, after, now) for q, order in SEARCH_PLAN]
     ids = merge_round_robin(results)
     metas = _metas(deps, ids, now)
+    # 로그인 작업이면 취향 프로필(자동 분석 또는 사용자 수정)로 영상을 고른다(결정 0010 개정)
+    profile = profile_of(deps.repos.users.get(job.user_id)) if job.user_id else None
     picked = select_videos(
         (metas[v] for v in ids if v in metas),
         now=now_dt,
@@ -156,9 +162,10 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
         destination=dest,
         max_videos=s.max_videos_per_job,
         max_spares=s.spare_videos_per_job,
+        taste_score=(lambda m: video_taste_score(m, profile)) if profile else None,
     )
-    if job.user_id:
-        personal = _personal_videos(deps, job.user_id, dest, now_dt, now)
+    if profile is not None:
+        personal = _personal_videos(deps, profile, dest, now_dt, now)
         if personal:
             picked = personal_first(
                 picked,

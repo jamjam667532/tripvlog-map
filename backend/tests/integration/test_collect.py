@@ -6,7 +6,7 @@ from datetime import timedelta
 from functions.collect.handler import Deps, run
 from shared.repos import Repos
 from shared.schemas.events import JobInput
-from shared.schemas.items import UserItem, UserPreferences
+from shared.schemas.items import UserItem, UserPreferences, YoutubeLink
 from shared.schemas.taste import ChannelVideo
 from shared.schemas.youtube import VideoMeta
 from shared.settings import Settings
@@ -201,3 +201,27 @@ def test_guest_job_does_not_look_at_personal_channels(repos: Repos, settings: Se
     youtube = FakeYouTube(SEARCH, METAS, uploads=UPLOADS)
     run(JobInput(job_id=job.job_id), _deps(repos, settings, youtube))
     assert youtube.upload_calls == []
+
+
+def test_auto_profile_from_youtube_is_used_without_any_user_edit(
+    repos: Repos, settings: Settings
+) -> None:
+    """결정 0010 개정: 유튜브 연결만 하면(수정 없음) 자동 프로필로 고른다."""
+    job = guest_job(guestAccessHash=None, userId=USER)
+    repos.jobs.create(job)
+    link = YoutubeLink.model_validate(
+        {
+            "linked": True,
+            "syncedAt": NOW.isoformat(),
+            "resyncDueAt": NOW.isoformat(),
+            "travelChannelIds": ["pc1"],
+            "styleProfileCandidate": {"맛집": 1.0},
+        }
+    )
+    repos.users.put(UserItem(user_id=USER, youtube=link))
+    youtube = FakeYouTube(SEARCH, METAS + PERSONAL, uploads=UPLOADS)
+    out = run(JobInput.model_validate({"jobId": str(job.job_id)}), _deps(repos, settings, youtube))
+    ids = [r.video_id for r in out.video_refs]
+    assert ids[0] == "p1"  # 구독 여행 채널 영상(새로 분석)
+    assert ids[1] == "v2"  # 일반 후보 중 맛집 영상이 유사도 1순위
+    assert youtube.upload_calls == ["pc1"]

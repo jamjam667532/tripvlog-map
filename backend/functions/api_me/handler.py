@@ -7,13 +7,15 @@ HTTP API 페이로드 2.0.
 
 GET    /me/preferences          선호와 유튜브 연결 상태
 PATCH  /me/preferences          선호 수정. 참고 채널은 지금 선호나 유튜브 후보 안에서만
-POST   /me/youtube/import       X-Google-Access-Token으로 구독·좋아요를 한 번 읽어 후보를 돌려준다
-POST   /me/youtube/confirm      사용자가 고른 채널·스타일을 선호에 저장
+POST   /me/youtube/import       X-Google-Access-Token으로 구독·좋아요를 한 번 읽어
+                                취향 프로필(구독 여행 채널 + 스타일 비율)을 자동으로 만든다
+POST   /me/youtube/confirm      자동 프로필을 사용자가 고친다(고친 값이 우선)
 DELETE /me/youtube/connection   유튜브에서 온 데이터만 지운다
 
 액세스 토큰은 요청 중에만 쓰고 저장·로그하지 않는다(확정 결정 3).
 채널 이름·영상 제목은 응답에만 쓰고 저장하지 않는다.
-라벨은 Bedrock 제안 → 근거 확인 → 사용자 확인을 거쳐야 선호가 된다.
+라벨은 Bedrock 제안 → 근거 확인(원문에 없으면 UNKNOWN)을 거쳐
+자동 프로필에 들어간다(결정 0010 개정).
 """
 
 import base64
@@ -44,7 +46,12 @@ from shared.clients.youtube import (
     YouTubeUserClient,
 )
 from shared.repos import Repos
-from shared.rules.taste import accept_label, style_profile, travel_candidates, travel_liked
+from shared.rules.taste import (
+    accept_label,
+    auto_travel_channels,
+    combined_style_profile,
+    travel_candidates,
+)
 from shared.schemas.api import ErrorBody, ErrorResponse
 from shared.schemas.items import UserItem, UserPreferences, YoutubeLink
 from shared.schemas.taste import (
@@ -60,6 +67,7 @@ logger = logging.getLogger(__name__)
 
 ACCESS_TOKEN_HEADER = "x-google-access-token"
 MAX_CHANNELS_CHECKED = 250  # 구독 200 + 좋아요 영상의 채널
+MAX_TRAVEL_CHANNELS = 50  # 취향 프로필에 담는 구독 여행 채널 상한
 
 
 @dataclass(frozen=True)
@@ -186,6 +194,10 @@ def import_youtube(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str,
     candidates = travel_candidates(infos, liked)
     labels = _labels(candidates, deps, now)
 
+    # 결정 0010 개정: 확인을 기다리지 않고 자동으로 취향 프로필을 만든다(화면에서 고칠 수 있다)
+    travel = auto_travel_channels(labels, liked)[:MAX_TRAVEL_CHANNELS]
+    profile = combined_style_profile(liked, labels)
+    applied = set(travel)
     shown: list[TasteChannelCandidate] = []
     for c in candidates:
         label = labels.get(c.channel_id) or ChannelTasteLabel(
@@ -199,18 +211,18 @@ def import_youtube(event: dict[str, Any], user_id: str, deps: Deps) -> dict[str,
                     travel=label.travel,
                     styles=list(label.styles),
                     evidence=label.evidence,
+                    applied=c.channel_id in applied,
                 )
             )
-    profile = style_profile(travel_liked(liked))
 
     user = deps.repos.users.get_or_new(user_id)
     link = YoutubeLink(
         linked=True,
         synced_at=now_dt,
         resync_due_at=now_dt + timedelta(days=deps.settings.youtube_cache_ttl_days),
-        travel_channel_ids=[c.channel_id for c in shown],
+        travel_channel_ids=travel,  # 자동 취향 프로필: 구독 여행 채널
         liked_travel_video_ids=[],  # 결정 0010-3: 저장하지 않는다
-        style_profile_candidate=profile,
+        style_profile_candidate=profile,  # 자동 취향 프로필: 스타일 비율
     )
     deps.repos.users.put(user.model_copy(update={"youtube": link}))
     return _response(

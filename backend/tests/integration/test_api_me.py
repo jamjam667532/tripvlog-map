@@ -86,7 +86,10 @@ def test_import_returns_candidates_and_stores_only_ids(
     assert set(shown) == {"food", "trip"}  # 게임 채널은 여행 후보가 아니다
     assert shown["trip"]["travel"] == "YES" and shown["trip"]["styles"] == ["관광·역사"]
     assert shown["food"]["travel"] == "UNKNOWN" and shown["food"]["styles"] == []
-    assert body["styleProfile"] == {"맛집": 1.0}
+    # 좋아요한 여행 영상(맛집 2) + 여행 채널 라벨(trip: 관광·역사)
+    assert body["styleProfile"] == {"맛집": 0.67, "관광·역사": 0.33}
+    # 자동 적용: trip은 근거 있는 YES, food는 라벨 UNKNOWN이지만 좋아요한 여행 영상이 2개
+    assert (shown["trip"]["applied"], shown["food"]["applied"]) == (True, True)
     assert user_api.tokens == [TOKEN]
 
     user = repos.users.get("google:" + SUB)

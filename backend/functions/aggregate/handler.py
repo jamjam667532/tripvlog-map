@@ -26,6 +26,7 @@ from shared.rules.area import area_groups
 from shared.rules.evidence import choose_display_name
 from shared.rules.ranking import rank_places
 from shared.rules.replacement import choose_replacement
+from shared.rules.taste import profile_of
 from shared.schemas.common import Category
 from shared.schemas.events import AggregateInput, AggregateOutput, ReplaceOutput, VideoTask
 from shared.schemas.items import JobItem, PlaceEvidenceItem, VideoRef
@@ -155,14 +156,15 @@ def build_result(job: JobItem, deps: Deps, now: datetime) -> JobResult:
     for pid, item in stored.items():
         categories[pid] = item.category_from_video
 
-    # 로그인 작업이면 사용자가 확인한 참고 채널이 방문한 장소에 가중치(결정 0010-2)
-    user = repos.users.get(job.user_id) if job.user_id else None
-    reference = user.preferences.reference_channel_ids if user else []
+    # 로그인 작업이면 취향 프로필로 순위를 개인화한다(결정 0010 개정): 구독 여행 채널이 다녀간
+    # 장소에 가중치, 장소 스타일이 취향 비율과 겹치는 만큼 가산
+    profile = profile_of(repos.users.get(job.user_id)) if job.user_id else None
     ranked = rank_places(
         aggregates,
         categories=categories,
         styles=job.request.styles,
-        reference_channel_ids=reference,
+        reference_channel_ids=profile.travel_channel_ids if profile else (),
+        style_weights=profile.style_weights if profile else None,
     )
     coords = repos.coords.get_many([r.place_id for r in ranked], now=int(now.timestamp()))
     # TODO(decision 0004-4): 좌표가 만료된 장소는 지도 결과에서 빼고 순위를 다시 매긴다
