@@ -43,6 +43,7 @@ class Settings:
     bedrock_region: str | None = None
     bedrock_interpreter_model_id: str | None = None
     bedrock_structured_output: bool = True
+    embedding_model_id: str | None = None  # 학교 게이트웨이 임베딩 별칭(결정 0011)
     gemini_model: str | None = None
     gemini_media_resolution: str = "MEDIA_RESOLUTION_LOW"
     # 구간 관찰(결정 0008): GEMINI_MODELS(쉼표로 나눈 선호 순)가 있으면 구간 관찰기를 쓴다.
@@ -83,6 +84,7 @@ class Settings:
             bedrock_region=_opt(e, "BEDROCK_REGION"),
             bedrock_interpreter_model_id=_opt(e, "BEDROCK_INTERPRETER_MODEL_ID"),
             bedrock_structured_output=e.get("BEDROCK_STRUCTURED_OUTPUT", "true").lower() == "true",
+            embedding_model_id=_opt(e, "EMBEDDING_MODEL_ID"),
             gemini_model=_opt(e, "GEMINI_MODEL"),
             gemini_media_resolution=e.get("GEMINI_MEDIA_RESOLUTION", d.gemini_media_resolution),
             gemini_models=tuple(

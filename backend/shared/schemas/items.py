@@ -43,6 +43,9 @@ class VideoRef(CamelModel):
     state: VideoState = "PENDING"
     error: str | None = None
     replaces: VideoId | None = None  # 결정 0002-5: 실패 영상 대신 분석한 대체 영상이면 원래 videoId
+    # 결정 0011: 로그인 작업에서 이 영상을 고른 관심사 이름(구독 채널 영상이면 "구독 채널")과 점수
+    theme: str | None = None
+    theme_score: Annotated[float, Field(ge=-1, le=2)] | None = None
 
 
 class SpareVideo(CamelModel):
@@ -211,6 +214,15 @@ class YoutubeSearchCacheItem(CamelModel):
     expires_at: EpochSeconds
 
 
+class VideoEmbeddingCacheItem(CamelModel):
+    """pk = VIDEO#{videoId}, sk = EMBED#{model}. 영상 제목·설명의 임베딩 캐시(결정 0011, 25일)."""
+
+    pk: Annotated[str, Field(pattern=r"^VIDEO#[A-Za-z0-9_-]{1,64}$")]
+    sk: Annotated[str, Field(pattern=r"^EMBED#[A-Za-z0-9._:-]{1,80}$")]
+    embedding: Annotated[list[float], Field(min_length=1)]
+    expires_at: EpochSeconds
+
+
 class ChannelTasteCacheItem(CamelModel):
     """pk = CHANNEL#{channelId}, sk = TASTE. 공개 채널의 취향 라벨 캐시(결정 0010).
 
@@ -257,6 +269,19 @@ class YoutubeQuotaItem(CamelModel):
 
 class UserPreferences(Preferences):
     reference_channel_ids: list[ChannelId] = Field(default_factory=list)
+    hidden_interests: list[str] = Field(default_factory=list)  # 사용자가 끈 관심사 이름(결정 0011)
+
+
+class UserInterest(CamelModel):
+    """구독·좋아요에서 뽑은 관심사(결정 0011). 유튜브 데이터라 YoutubeLink 안에 두고 함께 지운다."""
+
+    label: Annotated[str, Field(min_length=1, max_length=20)]
+    weight: Annotated[float, Field(ge=0, le=1)]
+    search_terms: Annotated[list[NonEmptyStr], Field(min_length=1, max_length=3)]
+    evidence_ids: Annotated[
+        list[NonEmptyStr], Field(min_length=1)
+    ]  # 채널·영상 ID만(제목은 저장 안 함)
+    embedding: Annotated[list[float], Field(min_length=1)]
 
 
 class YoutubeLink(CamelModel):
@@ -270,6 +295,7 @@ class YoutubeLink(CamelModel):
     style_profile_candidate: dict[Style, Annotated[float, Field(ge=0, le=1)]] = Field(
         default_factory=dict
     )
+    interests: list[UserInterest] = Field(default_factory=list)  # 결정 0011
 
 
 class UserItem(CamelModel):

@@ -192,29 +192,50 @@ class GatewayChat:
             "max_tokens": self._max_tokens,
             **({"thinking": {"type": "disabled"}} if self._disable_thinking else {}),
         }
-        req = HttpRequest(
-            "POST",
+        return gateway_post(
+            self._transport,
             self._url,
-            {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
-            json.dumps(body, ensure_ascii=False).encode(),
+            self._api_key,
+            body,
+            self._timeout,
+            self._sleep,
+            self.RATE_LIMIT_RETRIES,
         )
-        for attempt in range(self.RATE_LIMIT_RETRIES + 1):
-            try:
-                resp = self._transport(req, self._timeout)
-            except OSError as e:
-                raise ExternalApiError("llm-gateway", None, type(e).__name__) from None
-            if b"Budget has been exceeded" in resp.body:
-                raise ExternalApiError("llm-gateway", resp.status, "BUDGET_EXCEEDED")
-            if resp.status == 429 and attempt < self.RATE_LIMIT_RETRIES:
-                self._sleep(2.0**attempt)
-                continue
-            if not 200 <= resp.status < 300:
-                raise ExternalApiError("llm-gateway", resp.status)
-            data = json.loads(resp.body or b"{}")
-            if not isinstance(data, dict):
-                raise ExternalApiError("llm-gateway", resp.status, "unexpected body")
-            return data
-        raise ExternalApiError("llm-gateway", 429)
+
+
+def gateway_post(
+    transport: Transport,
+    url: str,
+    api_key: str,
+    body: dict[str, Any],
+    timeout: float,
+    sleep: Callable[[float], None],
+    retries: int = 3,
+) -> dict[str, Any]:
+    """학교 게이트웨이에 JSON POST. 예산 초과는 즉시 실패, 429는 지수 백오프(결정 0007-1)."""
+    req = HttpRequest(
+        "POST",
+        url,
+        {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json.dumps(body, ensure_ascii=False).encode(),
+    )
+    for attempt in range(retries + 1):
+        try:
+            resp = transport(req, timeout)
+        except OSError as e:
+            raise ExternalApiError("llm-gateway", None, type(e).__name__) from None
+        if b"Budget has been exceeded" in resp.body:
+            raise ExternalApiError("llm-gateway", resp.status, "BUDGET_EXCEEDED")
+        if resp.status == 429 and attempt < retries:
+            sleep(2.0**attempt)
+            continue
+        if not 200 <= resp.status < 300:
+            raise ExternalApiError("llm-gateway", resp.status)
+        data = json.loads(resp.body or b"{}")
+        if not isinstance(data, dict):
+            raise ExternalApiError("llm-gateway", resp.status, "unexpected body")
+        return data
+    raise ExternalApiError("llm-gateway", 429)
 
 
 def message_text(data: dict[str, Any]) -> str:

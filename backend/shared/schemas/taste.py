@@ -44,6 +44,28 @@ class ChannelTasteLabels(AIModel):
     labels: list[ChannelTasteLabel]
 
 
+class InterestProposal(AIModel):
+    """Bedrock이 제안한 관심사 하나(결정 0011). 근거 ID는 입력에 있어야 인정한다."""
+
+    label: str
+    evidence_ids: list[str] = Field(default_factory=list)
+    search_terms: list[str] = Field(default_factory=list)
+
+
+class InterestProposals(AIModel):
+    interests: list[InterestProposal]
+
+
+class InterestView(CamelModel):
+    """화면에 보여 줄 관심사. 근거 제목은 응답에만 쓰고 저장하지 않는다."""
+
+    label: str
+    weight: float
+    search_terms: list[str]
+    evidence_titles: list[str] = Field(default_factory=list)
+    hidden: bool = False
+
+
 class TasteChannelCandidate(CamelModel):
     """연결 화면에 보여 줄 채널 후보. 사용자가 고른 것만 저장한다."""
 
@@ -60,6 +82,7 @@ class YoutubeImportResponse(CamelModel):
 
     channels: list[TasteChannelCandidate]
     style_profile: dict[Style, float]
+    interests: list[InterestView] = Field(default_factory=list)
     subscriptions_checked: int
     liked_checked: int
 
@@ -73,3 +96,4 @@ class MeResponse(CamelModel):
     resync_due_at: AwareDatetime | None = None
     travel_channel_ids: list[ChannelId] = Field(default_factory=list)
     style_profile_candidate: dict[Style, float] = Field(default_factory=dict)
+    interests: list[InterestView] = Field(default_factory=list)

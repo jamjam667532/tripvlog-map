@@ -72,6 +72,7 @@ class ResultPlace(CamelModel):
     ratings: dict[RatingAspect, RatingCount] = Field(default_factory=dict)
     time_evidence: list[TimeEvidenceSummary] = Field(default_factory=list)
     evidence: list[EvidenceLink] = Field(default_factory=list)
+    themes: list[str] = Field(default_factory=list)  # 결정 0011: 이 장소를 찾게 한 관심사 이름
 
 
 class UnconfirmedPlace(CamelModel):
