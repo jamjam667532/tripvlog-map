@@ -5,12 +5,15 @@ from datetime import UTC, datetime
 import pytest
 
 from shared.rules.interests import (
+    LEXICAL_BONUS,
     SUBSCRIBED_THEME,
     Themed,
     active_interests,
     compose,
     cosine,
+    mean_vector,
     place_theme_boosts,
+    term_words,
     theme_queries,
     theme_score,
     validate_interests,
@@ -78,7 +81,7 @@ def test_cosine_and_theme_score_use_interest_weight() -> None:
     label, score = theme_score([0.9, 0.1, 0.0], [arch, anime])
     assert label == "건축" and score == pytest.approx(0.9939, abs=1e-3)
     label, score = theme_score([0.0, 1.0, 0.0], [arch, anime])
-    assert label == "애니" and score == pytest.approx(0.6)  # 비중 0이면 0.6배
+    assert label == "애니" and score == pytest.approx(0.8)  # 비중 0이면 0.8배
     assert theme_score([0.0, 0.0, 1.0], [arch]) == (None, 0.0)
 
 
@@ -130,3 +133,19 @@ def test_place_theme_boosts_take_best_video_score() -> None:
     )
     assert boosts == {"P1": 0.5}
     assert names == {"P1": ["건축", "애니"], "P2": [SUBSCRIBED_THEME]}
+
+
+def test_keyword_in_video_text_adds_bonus() -> None:
+    """2026-11-25 시험: "현대건축"처럼 임베딩이 약하게 보는 경우를 단어 일치가 보완한다."""
+    arch = interest("건축", [1.0, 0.0], weight=1.0, term="투어")  # 검색어 "건축 투어"
+    label, plain = theme_score([0.2, 1.0], [arch])
+    label2, boosted = theme_score([0.2, 1.0], [arch], "도쿄 현대건축 산책")
+    assert label == label2 == "건축"
+    assert boosted == pytest.approx(plain + LEXICAL_BONUS)
+    _, none = theme_score([0.2, 1.0], [arch], "도쿄 투어 브이로그")  # "투어"는 흔한 말이라 제외
+    assert none == pytest.approx(plain)
+
+
+def test_term_words_and_mean_vector() -> None:
+    assert term_words(["건축 투어", "애니 성지순례", "여행"]) == {"건축", "애니", "성지순례"}
+    assert mean_vector([[1.0, 0.0], [0.0, 1.0]]) == [0.5, 0.5]

@@ -226,7 +226,7 @@ def run(event: JobInput, deps: Deps) -> CollectOutput:
             Themed(m, label, score)
             for m in pool
             if m.video_id in vectors
-            for label, score in [theme_score(vectors[m.video_id], interests)]
+            for label, score in [theme_score(vectors[m.video_id], interests, video_text(m))]
             if label is not None
         ]
         picked, themes = compose(

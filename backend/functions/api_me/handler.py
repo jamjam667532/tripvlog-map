@@ -49,7 +49,12 @@ from shared.clients.youtube import (
     YouTubeUserClient,
 )
 from shared.repos import Repos
-from shared.rules.interests import interest_text, validate_interests
+from shared.rules.interests import (
+    MAX_EVIDENCE_TEXTS,
+    interest_text,
+    mean_vector,
+    validate_interests,
+)
 from shared.rules.taste import (
     accept_label,
     auto_travel_channels,
@@ -190,20 +195,34 @@ def _interests(
         )
         if not valid:
             return []
-        vectors = deps.embedder.embed([interest_text(i.label, i.search_terms) for i in valid])
+        # 관심사 벡터 = 관심사 문장 + 근거 채널·영상 글의 평균(글은 저장하지 않고 벡터만 남긴다)
+        texts = {c.channel_id: f"{c.title} {c.description[:120]}" for c in infos}
+        texts |= {v.video_id: v.title for v in liked}
+        groups = [
+            [
+                interest_text(i.label, i.search_terms),
+                *[texts[e] for e in i.evidence_ids if e in texts][:MAX_EVIDENCE_TEXTS],
+            ]
+            for i in valid
+        ]
+        flat = deps.embedder.embed([t for g in groups for t in g])
     except Exception:
         logger.exception("interest extraction failed")  # 채널 정보·토큰은 남기지 않는다
         return []
-    return [
-        UserInterest(
-            label=i.label,
-            weight=i.weight,
-            search_terms=i.search_terms,
-            evidence_ids=i.evidence_ids,
-            embedding=vec,
+    out: list[UserInterest] = []
+    at = 0
+    for i, g in zip(valid, groups, strict=True):
+        out.append(
+            UserInterest(
+                label=i.label,
+                weight=i.weight,
+                search_terms=i.search_terms,
+                evidence_ids=i.evidence_ids,
+                embedding=mean_vector(flat[at : at + len(g)]),
+            )
         )
-        for i, vec in zip(valid, vectors, strict=True)
-    ]
+        at += len(g)
+    return out
 
 
 def _labels(candidates: list[ChannelInfo], deps: Deps, now: int) -> dict[str, ChannelTasteLabel]:

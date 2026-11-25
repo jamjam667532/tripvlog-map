@@ -1,7 +1,9 @@
 """[M8] 관심사 기반 테마 추천 규칙 (결정 0011). 순수 함수.
 
 - 근거 검증: Bedrock이 제안한 관심사는 근거 ID가 입력에 있을 때만 쓰고, 비중은 근거 수로 정한다.
-- 유사도: 관심사 벡터와 영상 벡터의 코사인 유사도(관심사 비중으로 보정).
+- 관심사 벡터: 관심사 문장 + 근거 채널·영상 글의 임베딩 평균(2026-11-25 시험에서 짧은 문장만 쓰면
+  "에도 시대 유물"→역사를 놓쳤다).
+- 유사도: 코사인 유사도 x 비중 보정 + 검색어 단어가 영상 글에 있으면 가산("현대건축"을 놓치지 않게).
 - 구성: 개인화 3(구독 채널 영상 → 관심사 유사도 순) + 일반 2. 처음 가는 도시의 대표 장소를 지킨다.
 """
 
@@ -23,6 +25,10 @@ MAX_PERSONALIZED = 3  # 요청 5개 중 개인화 자리(결정 0011: 관심사 
 # TODO(tune): titan-embed-v2 실측(2026-11-25) 관련 0.34, 덜 관련 0.21, 무관 0.04
 MIN_THEME_SCORE = 0.25
 SUBSCRIBED_THEME = "구독 채널"
+LEXICAL_BONUS = 0.15  # 관심사 검색어 단어가 영상 제목·설명에 있으면 더한다
+MAX_EVIDENCE_TEXTS = 10  # 관심사 벡터에 섞는 근거 글 수(임베딩 비용 상한)
+# 검색어에 흔히 붙는 말은 단어 일치에서 뺀다
+GENERIC_WORDS = frozenset({"여행", "투어", "명소", "답사", "산책", "쇼핑", "브이로그", "코스"})
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,18 @@ def video_text(meta: VideoMeta) -> str:
     return f"{meta.title}\n{meta.description[:300]}"
 
 
+def mean_vector(vectors: Sequence[Sequence[float]]) -> list[float]:
+    """여러 벡터의 평균. 관심사 문장과 근거 글들을 하나의 관심사 벡터로 합친다."""
+    n = len(vectors)
+    return [sum(col) / n for col in zip(*vectors, strict=True)]
+
+
+def term_words(terms: Sequence[str]) -> set[str]:
+    """검색어의 의미 있는 단어(2글자 이상, 흔한 말 제외)."""
+    words = {w for t in terms for w in t.split() if len(w) >= 2}
+    return words - GENERIC_WORDS
+
+
 def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(x * x for x in b))
@@ -91,12 +109,17 @@ def theme_queries(
 
 
 def theme_score(
-    video_vector: Sequence[float], interests: Sequence[UserInterest]
+    video_vector: Sequence[float], interests: Sequence[UserInterest], text: str = ""
 ) -> tuple[str | None, float]:
-    """(가장 가까운 관심사, 점수). 점수 = 코사인 유사도 x (0.6 + 0.4 x 관심사 비중)."""
+    """(가장 가까운 관심사, 점수).
+
+    점수 = 코사인 유사도 x (0.8 + 0.2 x 관심사 비중) + 검색어 단어가 글에 있으면 LEXICAL_BONUS.
+    """
     best: tuple[str | None, float] = (None, 0.0)
     for i in interests:
-        s = cosine(video_vector, i.embedding) * (0.6 + 0.4 * i.weight)
+        s = cosine(video_vector, i.embedding) * (0.8 + 0.2 * i.weight)
+        if text and any(w in text for w in term_words(i.search_terms)):
+            s += LEXICAL_BONUS
         if s > best[1]:
             best = (i.label, round(s, 4))
     return best
