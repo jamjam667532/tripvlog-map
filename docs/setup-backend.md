@@ -174,6 +174,12 @@ curl -s "$API/public/jobs/<jobId>" -H 'x-guest-access-token: <토큰>'
 5. **지도 키:** 지도 전용 키에 웹사이트 제한 `https://<배포>.cloudfront.net/*`. 서버와 같은 키에는 제한을 걸지 않는다(서버 호출이 막힌다).
 6. **확인:** `curl -sI https://<배포>.cloudfront.net`이 `200`, 브라우저에서 도시 검색 → 지도에 핀.
 
+## 8. 로그인 (M8)
+
+1. Google Auth Platform: Branding(앱 이름 ClickToTrip), Audience(External, Testing, 테스트 사용자 등록), Data Access(`openid`, `userinfo.email`, `userinfo.profile`, `youtube.readonly`), Clients(Web client 1의 JavaScript 원본에 CloudFront 주소와 `http://localhost:5173`).
+2. CloudShell에 새 `backend.zip`과 `infra/deploy/m8_setup.sh`를 올리고 `bash m8_setup.sh <Client ID>`. 기존 Lambda 갱신, `api-jobs`·`api-me` 생성, JWT Authorizer, 로그인 경로 8개, CORS를 한 번에 한다.
+3. 확인: 토큰 없이 `GET /me/preferences`가 **401**이면 Authorizer가 동작한다.
+
 ## 막히면 전달할 것
 
 단계 번호, 오류 문구 전체, 함수 이름. 키 값과 `keys.json` 내용은 보내지 않는다.
